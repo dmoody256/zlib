@@ -73,21 +73,21 @@ def CreateNewEnv():
     #endif()
 
     source_files = [
-        'adler32.c',
-        'compress.c',
-        'crc32.c',
-        'deflate.c',
-        'gzclose.c',
-        'gzlib.c',
-        'gzread.c',
-        'gzwrite.c',
-        'inflate.c',
-        'infback.c',
-        'inftrees.c',
-        'inffast.c',
-        'trees.c',
-        'uncompr.c',
-        'zutil.c',
+        'build/adler32.c',
+        'build/compress.c',
+        'build/crc32.c',
+        'build/deflate.c',
+        'build/gzclose.c',
+        'build/gzlib.c',
+        'build/gzread.c',
+        'build/gzwrite.c',
+        'build/inflate.c',
+        'build/infback.c',
+        'build/inftrees.c',
+        'build/inffast.c',
+        'build/trees.c',
+        'build/uncompr.c',
+        'build/zutil.c',
     ]
 
     headerFiles = []
@@ -125,7 +125,7 @@ def CreateNewEnv():
         
     ]
 
-    env, prog = SetupBuildOutput(env, source_files)
+    env, prog = SetupBuildOutput(env, 'zlib', source_files)
     env = SetupInstalls(env)
     env = ConfigureEnv(env)
     #env = ConfigPlatformIDE(env, source_files, headerFiles, resourceFiles, prog)
@@ -133,7 +133,7 @@ def CreateNewEnv():
 
 def ConfigureEnv(env):
 
-    conf = Configure(env, config_h = True, custom_tests = {'CheckLargeFile64' : CheckLargeFile64})
+    conf = Configure(env, config_h = 'config.h', custom_tests = {'CheckLargeFile64' : CheckLargeFile64})
     conf.CheckCC()
     conf.CheckLargeFile64()
     conf.CheckCHeader('sys/types.h')
@@ -262,7 +262,7 @@ def ConfigPlatformIDE(env, sourceFiles, headerFiles, resources, program):
                     cmdargs = cmdargs)
     return env
 
-def SetupBuildOutput(env, sourceFiles):
+def SetupBuildOutput(env, progName, sourceFiles):
 
     windowsRedirect = ""
     linuxRedirect = "2>&1"
@@ -282,7 +282,7 @@ def SetupBuildOutput(env, sourceFiles):
     else:
         env['LINKCOM'] = env['LINKCOM'].replace('",'," > \\\"" + env.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\" 2>&1 ,") 
    
-    prog = env.SharedLibrary("build/libOpenDoorGL", soureFileObjs)
+    prog = env.SharedLibrary(progName, soureFileObjs)
 
     ###################################################
     # setup build output
@@ -304,9 +304,9 @@ def SetupBuildOutput(env, sourceFiles):
     
     builtBins = []
     if("Windows" in platform.system()):
-        builtBins.append("build/MyLifeApp.exe")
+        builtBins.append("build/" + progName + ".exe")
     else:
-        builtBins.append("build/MyLifeApp")
+        builtBins.append('libzlib.so')
         
     Progress(ProgressCounter(sourceFiles, builtBins), interval=1)
 
