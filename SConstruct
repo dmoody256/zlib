@@ -29,22 +29,33 @@ AddOption(
 )
 
 
+def CheckLargeFile64(context):
+    context.Message('Checking for off64_t... ')
+
+    prevDefines = ""
+    if('CPPDEFINES' in context.env):
+        prevDefines = context.env['CPPDEFINES']
+
+    context.env.Append(CPPDEFINES=['_LARGEFILE64_SOURCE=1'])
+    result = context.TryCompile("""
+
+    #include <sys/types.h>
+    off64_t dummy = 0;
+
+    """, '.c')
+
+    if not result:
+        context.env.Replace(CPPDEFINES = prevDefines)
+    context.Result(result)
+    return result
+
 env = Environment()
-
-conf = env.Configure(config_h = True)
-
-if conf.CheckCHeader('sys/types.h'):
-    conf.env.Append(CPPDEFINES=['HAVE_SYS_TYPES_H'])
-
+conf = Configure(env, config_h = True, custom_tests = {'CheckLargeFile64' : CheckLargeFile64})
+conf.CheckCC()
+conf.CheckLargeFile64()
+conf.CheckCHeader('sys/types.h')
 if conf.CheckCHeader('unistd.h'):
     conf.env.Append(CPPDEFINES=['HAVE_UNISTD_H'])    
-
-if conf.CheckType('off64_t', '#include <sys/types.h>\n'):
-    conf.env.Append(CPPDEFINES=['_LARGEFILE64_SOURCE=1'])
-
-if not conf.CheckType('size_t', '#include <stdio.h>\n#include <stdlib.h>\n'):
-    conf.env.Append(CPPDEFINES=['NO_SIZE_T=long'])
-
 if not conf.CheckFunc('fseeko'):
     conf.env.Append(CPPDEFINES=['NO_FSEEKO'])
 
