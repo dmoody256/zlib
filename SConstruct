@@ -32,6 +32,19 @@ def CheckLargeFile64(context):
     context.Result(result)
     return result
 
+def CheckSizeT(context):
+    context.Message('Checking for size_t... ')
+    result = context.TryCompile("""
+
+    #include <stdio.h>
+    #include <stdlib.h>
+    size_t dummy = 0;
+
+    """, '.c')
+
+    context.Result(result)
+    return result
+
 def CreateNewEnv():
 
     AddOption(
@@ -133,8 +146,14 @@ def CreateNewEnv():
 
 def ConfigureEnv(env):
 
-    conf = Configure(env, config_h = 'config.h', custom_tests = {'CheckLargeFile64' : CheckLargeFile64})
+    conf = Configure(env, config_h = 'config.h', 
+        custom_tests = {
+            'CheckLargeFile64' : CheckLargeFile64, 
+            'CheckSizeT'       : CheckSizeT,
+            })
     conf.CheckCC()
+    conf.CheckSizeT():
+
     conf.CheckLargeFile64()
     conf.CheckCHeader('sys/types.h')
     if conf.CheckCHeader('unistd.h'):
