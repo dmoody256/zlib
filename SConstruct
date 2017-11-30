@@ -25,9 +25,21 @@ def CheckLargeFile64(context):
     off64_t dummy = 0;
     """, 
     '.c')
-
+    context.Result(result)
+    context.Message('Checking for fseeko... ')
     if not result:
         context.env.Replace(CPPDEFINES = prevDefines)
+        result = context.TryCompile("""
+        #include <stdio.h>
+        int main(void) {
+            fseeko(NULL, 0, 0);
+            return 0;
+        }
+        """, 
+        '.c')
+        if not result:
+            context.env.Append(CPPDEFINES=['NO_FSEEKO'])
+
     context.Result(result)
     return result
 
@@ -186,10 +198,10 @@ def CreateNewEnv():
     resourceFiles = [
         
     ]
-
+    env = ConfigureEnv(env)
     env, prog = SetupBuildOutput(env, 'zlib', source_files)
     env = SetupInstalls(env)
-    env = ConfigureEnv(env)
+    
     #env = ConfigPlatformIDE(env, source_files, headerFiles, resourceFiles, prog)
     
 
@@ -207,9 +219,7 @@ def ConfigureEnv(env):
     conf.CheckLargeFile64()
     conf.CheckCHeader('sys/types.h')
     if conf.CheckCHeader('unistd.h'):
-        conf.env.Append(CPPDEFINES=['HAVE_UNISTD_H'])    
-    if not conf.CheckFunc('fseeko'):
-        conf.env.Append(CPPDEFINES=['NO_FSEEKO'])
+        conf.env.Append(CPPDEFINES=['HAVE_UNISTD_H'])   
 
     env = conf.Finish()
 
