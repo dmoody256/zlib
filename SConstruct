@@ -21,11 +21,10 @@ def CheckLargeFile64(context):
 
     context.env.Append(CPPDEFINES=['_LARGEFILE64_SOURCE=1'])
     result = context.TryCompile("""
-
     #include <sys/types.h>
     off64_t dummy = 0;
-
-    """, '.c')
+    """, 
+    '.c')
 
     if not result:
         context.env.Replace(CPPDEFINES = prevDefines)
@@ -35,12 +34,62 @@ def CheckLargeFile64(context):
 def CheckSizeT(context):
     context.Message('Checking for size_t... ')
     result = context.TryCompile("""
-
     #include <stdio.h>
     #include <stdlib.h>
     size_t dummy = 0;
+    """, 
+    '.c')
+    context.Result(result)
+    if not result:
+        context.Message('Checking for long long... ')
+        result = context.TryCompile("""
+        long long dummy = 0;
+        """, 
+        '.c')
+        context.Result(result)
+        context.Message('Checking for a pointer-size integer type... ')
+        size_t_type = ""
+        if result:
+            result = context.TryRun("""
+            #include <stdio.h>
+            int main(void) {
+                if (sizeof(void *) <= sizeof(int)) puts("int");
+                else if (sizeof(void *) <= sizeof(long)) puts("long");
+                else puts("z_longlong");
+                return 0;
+            }
+            """,
+            '.c')
+            size_t_type = result[1]
+        else:
+            result = context.TryRun("""
+            #include <stdio.h>
+            int main(void) {
+                if (sizeof(void *) <= sizeof(int)) puts("int");
+                else puts("long");
+                return 0;
+            }
+            """, 
+            '.c')
+            size_t_type = result[1]
+        if size_t_type == "":
+            context.Result(False);
+            context.Message("Failed to find a pointer-size integer type.")
+            return False
+        else:
+            context.env.Append(CPPDEFINES=['NO_SIZE_T='+size_t_type])
+            context.Result(size_t_type + ".")
+            return True
 
-    """, '.c')
+    return result
+
+def CheckSharedLibrary(context):
+    context.Message('Checking for shared library support... ')
+    result = context.TryBuild(context.env.SharedLibrary, """
+    extern int getchar();
+    int hello() {return getchar();}
+    """,
+    '.c')
 
     context.Result(result)
     return result
@@ -148,12 +197,13 @@ def ConfigureEnv(env):
 
     conf = Configure(env, config_h = 'config.h', 
         custom_tests = {
-            'CheckLargeFile64' : CheckLargeFile64, 
-            'CheckSizeT'       : CheckSizeT,
+            'CheckLargeFile64'  : CheckLargeFile64, 
+            'CheckSizeT'        : CheckSizeT,
+            'CheckSharedLibrary': CheckSharedLibrary,
             })
     conf.CheckCC()
-    conf.CheckSizeT():
-
+    conf.CheckSharedLibrary()
+    conf.CheckSizeT()
     conf.CheckLargeFile64()
     conf.CheckCHeader('sys/types.h')
     if conf.CheckCHeader('unistd.h'):
