@@ -230,31 +230,29 @@ def CreateNewEnv():
     
 
 def ConfigureEnv(env):
-
-    with open('zconf.h.in', 'r') as content_file:
-        print("Reading zconf.h... ")
-        env["ZCONFH"] = str(content_file.read())
-
-    conf = Configure(env,
-        custom_tests = {
-            'CheckLargeFile64'  : CheckLargeFile64, 
-            'CheckSizeT'        : CheckSizeT,
-            'CheckSharedLibrary': CheckSharedLibrary,
-            'CheckUnistdH'      : CheckUnistdH,
-            'ConfigureHeader'   : ConfigureHeader,
-            })
-
-    conf.CheckCC()
-    conf.CheckSharedLibrary()
-    conf.CheckSizeT()
-    conf.CheckLargeFile64()
-    conf.CheckCHeader('sys/types.h')
-    conf.CheckUnistdH()
-    conf.ConfigureHeader()
-
+    if not env.GetOption('clean'):
     
+        with open('zconf.h.in', 'r') as content_file:
+            print("Reading zconf.h... ")
+            env["ZCONFH"] = str(content_file.read())
 
-    env = conf.Finish()
+        conf = Configure(env,
+            custom_tests = {
+                'CheckLargeFile64'  : CheckLargeFile64, 
+                'CheckSizeT'        : CheckSizeT,
+                'CheckSharedLibrary': CheckSharedLibrary,
+                'CheckUnistdH'      : CheckUnistdH,
+                'ConfigureHeader'   : ConfigureHeader,
+                })
+
+        conf.CheckCC()
+        conf.CheckSharedLibrary()
+        conf.CheckSizeT()
+        conf.CheckLargeFile64()
+        conf.CheckCHeader('sys/types.h')
+        conf.CheckUnistdH()
+        conf.ConfigureHeader()
+        env = conf.Finish()
     
     if("linux" in platform.system().lower() ):
 
