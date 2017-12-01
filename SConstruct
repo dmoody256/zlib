@@ -106,6 +106,30 @@ def CheckSharedLibrary(context):
     context.Result(result)
     return result
 
+def CheckUnistdH(context):
+    context.Message('Checking for unistd.h... ')
+    result = context.TryCompile("""
+    #include <unistd.h>
+    int main() { return 0; }
+    """, 
+    '.c')
+    if result:
+        context.env["ZCONFH"] = re.sub(
+            r"def\sHAVE_UNISTD_H(.*)\smay\sbe", r" 1\1 was", context.env["ZCONFH"],re.MULTILINE)  
+    context.Result(result)
+    return result
+
+def ConfigureHeader(context):
+    context.Message("Writing configuration header zconf.h... ")
+    with open('zconf.h', 'w') as content_file:
+        content_file.write(context.env["ZCONFH"])
+        context.Result(True)
+        return True
+    context.Result(False)
+    return False
+    
+
+
 def CreateNewEnv():
 
     AddOption(
@@ -198,31 +222,40 @@ def CreateNewEnv():
     resourceFiles = [
         
     ]
-    env = ConfigureEnv(env)
+   
     env, prog = SetupBuildOutput(env, 'zlib', source_files)
     env = SetupInstalls(env)
-    
+    env = ConfigureEnv(env)
     #env = ConfigPlatformIDE(env, source_files, headerFiles, resourceFiles, prog)
     
 
 def ConfigureEnv(env):
 
-    conf = Configure(env, config_h = 'config.h', 
+    with open('zconf.h.in', 'r') as content_file:
+        print("Reading zconf.h... ")
+        env["ZCONFH"] = str(content_file.read())
+
+    conf = Configure(env,
         custom_tests = {
             'CheckLargeFile64'  : CheckLargeFile64, 
             'CheckSizeT'        : CheckSizeT,
             'CheckSharedLibrary': CheckSharedLibrary,
+            'CheckUnistdH'      : CheckUnistdH,
+            'ConfigureHeader'   : ConfigureHeader,
             })
+
     conf.CheckCC()
     conf.CheckSharedLibrary()
     conf.CheckSizeT()
     conf.CheckLargeFile64()
     conf.CheckCHeader('sys/types.h')
-    if conf.CheckCHeader('unistd.h'):
-        conf.env.Append(CPPDEFINES=['HAVE_UNISTD_H'])   
+    conf.CheckUnistdH()
+    conf.ConfigureHeader()
+
+    
 
     env = conf.Finish()
-
+    
     if("linux" in platform.system().lower() ):
 
         debugFlag = ""
