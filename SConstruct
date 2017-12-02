@@ -79,12 +79,22 @@ def CreateNewEnv():
         help='An alternate GCC to use in some cases such as Code Coverage testing.'
     )
 
+    AddOption(
+        '--verbose',
+        dest='option_verbose',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='View compiler output.'
+    )
+
     env = Environment(
         DEBUG_BUILD = GetOption('option_debug'),
         ZPREFIX = GetOption('option_zprefix'),
         SOLO = GetOption('option_solo'),   
         COVER = GetOption('option_cover'),   
         GCC_CLASSIC = GetOption('option_gcc_classic'),
+        VERBOSE_COMPILE = GetOption('option_verbose'),
     )
     env.baseProjectDir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
     env.VariantDir(Dir('build'), Dir('.'), duplicate=0)
@@ -326,6 +336,182 @@ def ConfigureEnv(env):
         context.Result(result)
         return result
     
+    def CheckVsnprintf(context):
+        context.Message("Checking whether to use vs[n]printf() or s[n]printf()... ")
+        result = context.TryCompile("""
+        #include <stdio.h>
+        #include <stdarg.h>
+        #include "zconf.h"
+        int main()
+        {
+        #ifndef STDC
+            choke me
+        #endif
+            return 0;
+        }
+        """, 
+        '.c')
+        if result:
+            context.Result("using vs[n]printf().")
+        else:
+            context.Result("using s[n]printf().")
+        return result
+
+    def CheckVsnStdio(context):
+        context.Message("Checking for vsnprintf() in stdio.h... ")
+        result = context.TryCompile("""
+        #include <stdio.h>
+        #include <stdarg.h>
+        int mytest(const char *fmt, ...)
+        {
+            char buf[20];
+            va_list ap;
+            va_start(ap, fmt);
+            vsnprintf(buf, sizeof(buf), fmt, ap);
+            va_end(ap);
+            return 0;
+        }
+        int main()
+        {
+            return (mytest("Hello%d\\n", 1));
+        }
+        """, 
+        '.c')
+        context.Result(result)
+        if not result:
+            context.env.Append(CPPDEFINES=["NO_vsnprintf"])
+            print("  WARNING: vsnprintf() not found, falling back to vsprintf(). zlib")
+            print("  can build but will be open to possible buffer-overflow security")
+            print("  vulnerabilities.")
+        return result
+
+    def CheckVsnprintfReturn(context):
+        context.Message("Checking for return value of vsnprintf()... ")
+        result = context.TryCompile("""
+        #include <stdio.h>
+        #include <stdarg.h>
+        int mytest(const char *fmt, ...)
+        {
+            int n;
+            char buf[20];
+            va_list ap;
+            va_start(ap, fmt);
+            n = vsnprintf(buf, sizeof(buf), fmt, ap);
+            va_end(ap);
+            return n;
+        }
+        int main()
+        {
+            return (mytest("Hello%d\\n", 1));
+        }
+        """, 
+        '.c')
+        context.Result(result)
+        if not result:
+            context.env.Append(CPPDEFINES=["HAS_vsnprintf_void"])
+            print("  WARNING: apparently vsnprintf() does not return a value. zlib")
+            print("  can build but will be open to possible string-format security")
+            print("  vulnerabilities.")
+        return result
+
+    def CheckVsprintfReturn(context):
+        context.Message("Checking for return value of vsnprintf()... ")
+        result = context.TryCompile("""
+        #include <stdio.h>
+        #include <stdarg.h>
+        int mytest(const char *fmt, ...)
+        {
+            int n;
+            char buf[20];
+            va_list ap;
+            va_start(ap, fmt);
+            n = vsprintf(buf, fmt, ap);
+            va_end(ap);
+            return n;
+        }
+        int main()
+        {
+            return (mytest("Hello%d\\n", 1));
+        }
+        """, 
+        '.c')
+        context.Result(result)
+        if not result:
+            context.env.Append(CPPDEFINES=["HAS_vsprintf_void"])
+            print("  WARNING: apparently vsprintf() does not return a value. zlib")
+            print("  can build but will be open to possible string-format security")
+            print("  vulnerabilities.")
+        return result
+
+    def CheckSnStdio(context):
+        context.Message("Checking for snprintf() in stdio.h... ")
+        result = context.TryCompile("""
+        #include <stdio.h>
+        int mytest()
+        {
+            char buf[20];
+            snprintf(buf, sizeof(buf), "%s", "foo");
+            return 0;
+        }
+        int main()
+        {
+            return (mytest());
+        }
+        """, 
+        '.c')
+        context.Result(result)
+        if not result:
+            context.env.Append(CPPDEFINES=["NO_snprintf"])
+            print("  WARNING: snprintf() not found, falling back to sprintf(). zlib")
+            print("  can build but will be open to possible buffer-overflow security")
+            print("  vulnerabilities.")
+        return result
+
+    def CheckSnprintfReturn(context):
+        context.Message("Checking for return value of snprintf()... ")
+        result = context.TryCompile("""
+        #include <stdio.h>
+        int mytest()
+        {
+            char buf[20];
+            return snprintf(buf, sizeof(buf), "%s", "foo");
+        }
+        int main()
+        {
+            return (mytest());
+        }
+        """, 
+        '.c')
+        context.Result(result)
+        if not result:
+            context.env.Append(CPPDEFINES=["HAS_snprintf_void"])
+            print("  WARNING: apparently snprintf() does not return a value. zlib")
+            print("  can build but will be open to possible string-format security")
+            print("  vulnerabilities.")
+        return result
+
+    def CheckSprintfReturn(context):
+        context.Message("Checking for return value of sprintf()... ")
+        result = context.TryCompile("""
+        #include <stdio.h>
+        int mytest()
+        {
+            char buf[20];
+            return sprintf(buf, "%s", "foo");
+        }
+        int main()
+        {
+            return (mytest());
+        }
+        """, 
+        '.c')
+        context.Result(result)
+        if not result:
+            context.env.Append(CPPDEFINES=["HAS_sprintf_void"])
+            print("  WARNING: apparently sprintf() does not return a value. zlib")
+            print("  can build but will be open to possible string-format security")
+            print("  vulnerabilities.")
+        return result
 
     if not env.GetOption('clean'):
     
@@ -340,6 +526,13 @@ def ConfigureEnv(env):
                 'CheckUnistdH'         : CheckUnistdH,
                 'CheckStrerror'        : CheckStrerror,
                 'CheckStdargH'         : CheckStdargH,
+                'CheckVsnprintf'       : CheckVsnprintf,
+                'CheckVsnStdio'        : CheckVsnStdio,
+                'CheckVsnprintfReturn' : CheckVsnprintfReturn,
+                'CheckVsprintfReturn'  : CheckVsprintfReturn,
+                'CheckSnStdio'         : CheckSnStdio,
+                'CheckSnprintfReturn'  : CheckSnprintfReturn,
+                'CheckSprintfReturn'   : CheckSprintfReturn,
                 'AddZPrefix'           : AddZPrefix,
                 'AddSolo'              : AddSolo,
                 'AddCover'             : AddCover,
@@ -361,7 +554,7 @@ def ConfigureEnv(env):
         conf.CheckStrerror()
         conf.CheckUnistdH()
         conf.CheckStdargH()
-        
+
         if conf.env['ZPREFIX']: conf.AddZPrefix()
         if conf.env['SOLO']:    conf.AddSolo()
         if conf.env['COVER']:   conf.AddCover()
@@ -369,6 +562,17 @@ def ConfigureEnv(env):
         with open('zconf.h', 'w') as content_file:
             print("Writing zconf.h...")
             content_file.write(conf.env["ZCONFH"])
+
+        if conf.CheckVsnprintf():
+            if conf.CheckVsnStdio():
+                conf.CheckVsnprintfReturn()
+            else:
+                conf.CheckVsprintfReturn()
+        else:
+            if conf.CheckSnStdio():
+                conf.CheckSnprintfReturn()
+            else:
+                conf.CheckSprintfReturn()
 
         env = conf.Finish()
     
@@ -524,8 +728,8 @@ def SetupBuildOutput(env, progName, sourceFiles):
     soureFileObjs = []
     for file in sourceFiles:
         buildObj = env.SharedObject(file, 
-                             CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
-                             CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
+                            CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
+                            CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
         soureFileObjs.append(buildObj)
 
     if("Windows" in platform.system()):
@@ -550,7 +754,7 @@ def SetupBuildOutput(env, progName, sourceFiles):
             f.write(s + "\n")
 
     env['BUILD_LOG_TIME'] = datetime.datetime.fromtimestamp(time.time()).strftime('%Y_%m_%d__%H_%M_%S')
-    if("VERBOSE" not in ARGUMENTS):
+    if(not env['VERBOSE_COMPILE']):
         env['PRINT_CMD_LINE_FUNC'] = print_cmd_line
     
     builtBins = []
