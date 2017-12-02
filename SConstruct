@@ -45,7 +45,50 @@ def CreateNewEnv():
         help='Enable building amd64 assembly implementation'
     )
 
-    env = Environment(DEBUG_BUILD = GetOption('option_debug'))
+    AddOption(
+        '--zprefix',
+        dest='option_zprefix',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='Precedes all external symbols with z_ to reduce probability of a symbol name collision'
+    )
+
+    AddOption(
+        '--solo',
+        dest='option_solo',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='Used to compile and use zlib without the use of any external libraries.'
+    )
+
+    AddOption(
+        '--cover',
+        dest='option_cover',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='code coverage testing was requested'
+    )
+
+    AddOption(
+        '--gcc-classic',
+        dest='option_gcc_classic',
+        action='store',
+        type='string',
+        metavar='STRING',
+        default='',
+        help='An alternate GCC to use in some cases such as Code Coverage testing.'
+    )
+
+    env = Environment(
+        DEBUG_BUILD = GetOption('option_debug'),
+        ZPREFIX = GetOption('option_zprefix'),
+        SOLO = GetOption('option_solo'),   
+        COVER = GetOption('option_cover'),   
+        GCC_CLASSIC = GetOption('option_gcc_classic'),
+    )
     env.baseProjectDir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
     env.VariantDir(Dir('build'), Dir('.'), duplicate=0)
 
@@ -246,6 +289,50 @@ def ConfigureEnv(env):
         context.Result(result)
         return result
         
+    def CheckStdargH(context):
+        context.Message('Checking for stdarg.h... ')
+        result = context.TryCompile("""
+        #include <stdarg.h>
+        int main() { return 0; }
+        """, 
+        '.c')
+        if result:
+            context.env["ZCONFH"] = re.sub(
+                r"def\sHAVE_STDARG_H(.*)\smay\sbe", r" 1\1 was", context.env["ZCONFH"],re.MULTILINE)  
+        context.Result(result)
+        return result
+
+    def AddZPrefix(context):
+        context.Message('Using z_ prefix on all symbols... ')
+        result = context.env['ZPREFIX'] 
+        if result:
+            context.env["ZCONFH"] = re.sub(
+                r"def\sZ_PREFIX(.*)\smay\sbe", r" 1\1 was", context.env["ZCONFH"],re.MULTILINE)  
+        context.Result(result)
+        return result
+
+    def AddSolo(context):
+        context.Message('Using Z_SOLO to build... ')
+        result = context.env['SOLO'] 
+        if result:
+            context.env["ZCONFH"] = re.sub(
+                r"\#define\sZCONF_H", r"#define ZCONF_H\n#define Z_SOLO", context.env["ZCONFH"],re.MULTILINE)  
+        context.Result(result)
+        return result
+
+    def AddCover(context):
+        context.Message('Using code coverage flags... ')
+        result = context.env['COVER'] 
+        if result:
+            context.env.Append(CCFLAGS=[
+                '-fprofile-arcs', 
+                '-ftest-coverage',
+            ])
+        if not context.env['GCC_CLASSIC'] == "":
+            context.env.Replace(CC = context.env['GCC_CLASSIC'])
+        context.Result(result)
+        return result
+    
 
     if not env.GetOption('clean'):
     
@@ -256,19 +343,29 @@ def ConfigureEnv(env):
                 'CheckSharedLibrary': CheckSharedLibrary,
                 'CheckUnistdH'      : CheckUnistdH,
                 'CheckStrerror'     : CheckStrerror,
+                'CheckStdargH'      : CheckStdargH,
+                'AddZPrefix'        : AddZPrefix,
+                'AddSolo'           : AddSolo,
+                'AddCover'          : AddCover,
                 'ConfigureHeader'   : ConfigureHeader,
+
                 })
         
         with open('zconf.h.in', 'r') as content_file:
-            print("Reading zconf.h... ")
+            print("Reading zconf.h.in... ")
             conf.env["ZCONFH"] = str(content_file.read())
 
         conf.CheckCC()
         conf.CheckSharedLibrary()
+        #conf.CheckExternalNames()
         conf.CheckSizeT()
         conf.CheckLargeFile64()
         conf.CheckStrerror()
         conf.CheckUnistdH()
+        conf.CheckStdargH()
+        if conf.env['ZPREFIX']: conf.AddZPrefix()
+        if conf.env['SOLO']:    conf.AddSolo()
+        if conf.env['COVER']:   conf.AddCover()
         conf.ConfigureHeader()
 
         env = conf.Finish()
