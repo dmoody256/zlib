@@ -12,121 +12,7 @@ import xml.etree.cElementTree as ET
 from cStringIO import StringIO
 import SCons.Action
 
-def CheckLargeFile64(context):
-    context.Message('Checking for off64_t... ')
 
-    prevDefines = ""
-    if('CPPDEFINES' in context.env):
-        prevDefines = context.env['CPPDEFINES']
-
-    context.env.Append(CPPDEFINES=['_LARGEFILE64_SOURCE=1'])
-    result = context.TryCompile("""
-    #include <sys/types.h>
-    off64_t dummy = 0;
-    """, 
-    '.c')
-    context.Result(result)
-    context.Message('Checking for fseeko... ')
-    if not result:
-        context.env.Replace(CPPDEFINES = prevDefines)
-        result = context.TryCompile("""
-        #include <stdio.h>
-        int main(void) {
-            fseeko(NULL, 0, 0);
-            return 0;
-        }
-        """, 
-        '.c')
-        if not result:
-            context.env.Append(CPPDEFINES=['NO_FSEEKO'])
-
-    context.Result(result)
-    return result
-
-def CheckSizeT(context):
-    context.Message('Checking for size_t... ')
-    result = context.TryCompile("""
-    #include <stdio.h>
-    #include <stdlib.h>
-    size_t dummy = 0;
-    """, 
-    '.c')
-    context.Result(result)
-    if not result:
-        context.Message('Checking for long long... ')
-        result = context.TryCompile("""
-        long long dummy = 0;
-        """, 
-        '.c')
-        context.Result(result)
-        context.Message('Checking for a pointer-size integer type... ')
-        size_t_type = ""
-        if result:
-            result = context.TryRun("""
-            #include <stdio.h>
-            int main(void) {
-                if (sizeof(void *) <= sizeof(int)) puts("int");
-                else if (sizeof(void *) <= sizeof(long)) puts("long");
-                else puts("z_longlong");
-                return 0;
-            }
-            """,
-            '.c')
-            size_t_type = result[1]
-        else:
-            result = context.TryRun("""
-            #include <stdio.h>
-            int main(void) {
-                if (sizeof(void *) <= sizeof(int)) puts("int");
-                else puts("long");
-                return 0;
-            }
-            """, 
-            '.c')
-            size_t_type = result[1]
-        if size_t_type == "":
-            context.Result(False);
-            context.Message("Failed to find a pointer-size integer type.")
-            return False
-        else:
-            context.env.Append(CPPDEFINES=['NO_SIZE_T='+size_t_type])
-            context.Result(size_t_type + ".")
-            return True
-
-    return result
-
-def CheckSharedLibrary(context):
-    context.Message('Checking for shared library support... ')
-    result = context.TryBuild(context.env.SharedLibrary, """
-    extern int getchar();
-    int hello() {return getchar();}
-    """,
-    '.c')
-
-    context.Result(result)
-    return result
-
-def CheckUnistdH(context):
-    context.Message('Checking for unistd.h... ')
-    result = context.TryCompile("""
-    #include <unistd.h>
-    int main() { return 0; }
-    """, 
-    '.c')
-    if result:
-        context.env["ZCONFH"] = re.sub(
-            r"def\sHAVE_UNISTD_H(.*)\smay\sbe", r" 1\1 was", context.env["ZCONFH"],re.MULTILINE)  
-    context.Result(result)
-    return result
-
-def ConfigureHeader(context):
-    context.Message("Writing configuration header zconf.h... ")
-    with open('zconf.h', 'w') as content_file:
-        content_file.write(context.env["ZCONFH"])
-        context.Result(True)
-        return True
-    context.Result(False)
-    return False
     
 
 
@@ -230,28 +116,161 @@ def CreateNewEnv():
     
 
 def ConfigureEnv(env):
+
+    def CheckLargeFile64(context):
+        context.Message('Checking for off64_t... ')
+
+        prevDefines = ""
+        if('CPPDEFINES' in context.env):
+            prevDefines = context.env['CPPDEFINES']
+
+        context.env.Append(CPPDEFINES=['_LARGEFILE64_SOURCE=1'])
+        result = context.TryCompile("""
+        #include <sys/types.h>
+        off64_t dummy = 0;
+        """, 
+        '.c')
+        context.Result(result)
+        context.Message('Checking for fseeko... ')
+        if not result:
+            context.env.Replace(CPPDEFINES = prevDefines)
+            result = context.TryCompile("""
+            #include <stdio.h>
+            int main(void) {
+                fseeko(NULL, 0, 0);
+                return 0;
+            }
+            """, 
+            '.c')
+            if not result:
+                context.env.Append(CPPDEFINES=['NO_FSEEKO'])
+
+        context.Result(result)
+        return result
+
+    def CheckSizeT(context):
+        context.Message('Checking for size_t... ')
+        result = context.TryCompile("""
+        #include <stdio.h>
+        #include <stdlib.h>
+        size_t dummy = 0;
+        """, 
+        '.c')
+        context.Result(result)
+        if not result:
+            context.Message('Checking for long long... ')
+            result = context.TryCompile("""
+            long long dummy = 0;
+            """, 
+            '.c')
+            context.Result(result)
+            context.Message('Checking for a pointer-size integer type... ')
+            size_t_type = ""
+            if result:
+                result = context.TryRun("""
+                #include <stdio.h>
+                int main(void) {
+                    if (sizeof(void *) <= sizeof(int)) puts("int");
+                    else if (sizeof(void *) <= sizeof(long)) puts("long");
+                    else puts("z_longlong");
+                    return 0;
+                }
+                """,
+                '.c')
+                size_t_type = result[1]
+            else:
+                result = context.TryRun("""
+                #include <stdio.h>
+                int main(void) {
+                    if (sizeof(void *) <= sizeof(int)) puts("int");
+                    else puts("long");
+                    return 0;
+                }
+                """, 
+                '.c')
+                size_t_type = result[1]
+            if size_t_type == "":
+                context.Result(False);
+                context.Message("Failed to find a pointer-size integer type.")
+                return False
+            else:
+                context.env.Append(CPPDEFINES=['NO_SIZE_T='+size_t_type])
+                context.Result(size_t_type + ".")
+                return True
+
+        return result
+
+    def CheckSharedLibrary(context):
+        context.Message('Checking for shared library support... ')
+        result = context.TryBuild(context.env.SharedLibrary, """
+        extern int getchar();
+        int hello() {return getchar();}
+        """,
+        '.c')
+
+        context.Result(result)
+        return result
+
+    def CheckUnistdH(context):
+        context.Message('Checking for unistd.h... ')
+        result = context.TryCompile("""
+        #include <unistd.h>
+        int main() { return 0; }
+        """, 
+        '.c')
+        if result:
+            context.env["ZCONFH"] = re.sub(
+                r"def\sHAVE_UNISTD_H(.*)\smay\sbe", r" 1\1 was", context.env["ZCONFH"],re.MULTILINE)  
+        context.Result(result)
+        return result
+
+    def ConfigureHeader(context):
+        context.Message("Writing configuration header zconf.h... ")
+        with open('zconf.h', 'w') as content_file:
+            content_file.write(context.env["ZCONFH"])
+            context.Result(True)
+            return True
+        context.Result(False)
+        return False
+
+    def CheckStrerror(context):
+        context.Message('Checking for strerror... ')
+        result = context.TryCompile("""
+        #include <string.h>
+        #include <errno.h>
+        int main() { return strlen(strerror(errno)); }
+        """, 
+        '.c')
+        if not result:
+            context.env.Append(CPPDEFINES=['NO_STRERROR'])
+        context.Result(result)
+        return result
+        
+
     if not env.GetOption('clean'):
     
-        with open('zconf.h.in', 'r') as content_file:
-            print("Reading zconf.h... ")
-            env["ZCONFH"] = str(content_file.read())
-
         conf = Configure(env,
             custom_tests = {
                 'CheckLargeFile64'  : CheckLargeFile64, 
                 'CheckSizeT'        : CheckSizeT,
                 'CheckSharedLibrary': CheckSharedLibrary,
                 'CheckUnistdH'      : CheckUnistdH,
+                'CheckStrerror'     : CheckStrerror,
                 'ConfigureHeader'   : ConfigureHeader,
                 })
+        
+        with open('zconf.h.in', 'r') as content_file:
+            print("Reading zconf.h... ")
+            conf.env["ZCONFH"] = str(content_file.read())
 
         conf.CheckCC()
         conf.CheckSharedLibrary()
         conf.CheckSizeT()
         conf.CheckLargeFile64()
-        conf.CheckCHeader('sys/types.h')
+        conf.CheckStrerror()
         conf.CheckUnistdH()
         conf.ConfigureHeader()
+
         env = conf.Finish()
     
     if("linux" in platform.system().lower() ):
