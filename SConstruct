@@ -96,6 +96,13 @@ def CreateNewEnv():
         GCC_CLASSIC = GetOption('option_gcc_classic'),
         VERBOSE_COMPILE = GetOption('option_verbose'),
     )
+
+    ###################################################
+    # Determine number of CPUs
+    num_cpus = get_cpu_nums()
+    print ("Building with %d parallel jobs" % num_cpus)
+    env.SetOption( "num_jobs", num_cpus )
+
     env.baseProjectDir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
     env.VariantDir(Dir('build'), Dir('.'), duplicate=0)
 
@@ -158,13 +165,31 @@ def CreateNewEnv():
     resourceFiles = [
         
     ]
+
+    progCounter = ProgressCounter()
+    resetProgressCallback = SCons.Action.ActionFactory( progCounter.resetProgress,
+                                            lambda sourceFiles, targetBins: 'Reseting Progress Counter...')
+
+    progCounter.resetProgress(source_files, ['libzlib.so'])
+
+    env, shared_lib, shared_nodes = SetupBuildOutput(env, 'shared', 'zlib', source_files)
+    env, static_lib, static_nodes = SetupBuildOutput(env, 'static', 'zlib', source_files)
    
-    env, prog = SetupBuildOutput(env, 'zlib', source_files)
+    shared_build = []
+    shared_build.append(shared_lib)
+    shared_build.extend(shared_nodes)
+
+    reset = env.Command( None, shared_build, resetProgressCallback(source_files, ['libzlib.a']))
+    for node in static_nodes:
+        Depends(node, reset)
+        Depends(node, shared_build)
+
     env = SetupInstalls(env)
     env = ConfigureEnv(env)
     #env = ConfigPlatformIDE(env, source_files, headerFiles, resourceFiles, prog)
-    
 
+    Progress(progCounter, interval=1)
+    
 def ConfigureEnv(env):
 
     def CheckLargeFile64(context):
@@ -513,6 +538,22 @@ def ConfigureEnv(env):
             print("  vulnerabilities.")
         return result
 
+    def CheckHidden(context):
+        context.Message("Checking for attribute(visibility) support... ")
+        result = context.TryCompile("""
+        #define ZLIB_INTERNAL __attribute__((visibility ("hidden")))
+        int ZLIB_INTERNAL foo;
+        int main()
+        {
+            return 0;
+        }
+        """, 
+        '.c')
+        context.Result(result)
+        if result:
+            context.env.Append(CPPDEFINES=["HAVE_HIDDEN"])
+        return result
+
     if not env.GetOption('clean'):
     
         conf = Configure(env,
@@ -533,14 +574,14 @@ def ConfigureEnv(env):
                 'CheckSnStdio'         : CheckSnStdio,
                 'CheckSnprintfReturn'  : CheckSnprintfReturn,
                 'CheckSprintfReturn'   : CheckSprintfReturn,
+                'CheckHidden'          : CheckHidden,
                 'AddZPrefix'           : AddZPrefix,
                 'AddSolo'              : AddSolo,
                 'AddCover'             : AddCover,
-
                 })
 
         with open('zconf.h.in', 'r') as content_file:
-            print("Reading zconf.h.in... ")
+            #print("Reading zconf.h.in... ")
             conf.env["ZCONFH"] = str(content_file.read())  
 
         conf.CheckCC()
@@ -560,7 +601,7 @@ def ConfigureEnv(env):
         if conf.env['COVER']:   conf.AddCover()
 
         with open('zconf.h', 'w') as content_file:
-            print("Writing zconf.h...")
+            #print("Writing zconf.h...")
             content_file.write(conf.env["ZCONFH"])
 
         if conf.CheckVsnprintf():
@@ -573,6 +614,8 @@ def ConfigureEnv(env):
                 conf.CheckSnprintfReturn()
             else:
                 conf.CheckSprintfReturn()
+
+        conf.CheckHidden()
 
         env = conf.Finish()
     
@@ -711,13 +754,9 @@ def get_cpu_nums():
         return ncpus
     return 1 # Default
 
-def SetupBuildOutput(env, progName, sourceFiles):
+def SetupBuildOutput(env, type, progName, sourceFiles):
 
-    ###################################################
-    # Determine number of CPUs
-    num_cpus = get_cpu_nums()
-    print ("Building with %d parallel jobs" % num_cpus)
-    env.SetOption( "num_jobs", num_cpus )
+    
 
     windowsRedirect = ""
     linuxRedirect = "2>&1"
@@ -727,17 +766,26 @@ def SetupBuildOutput(env, progName, sourceFiles):
 
     soureFileObjs = []
     for file in sourceFiles:
-        buildObj = env.SharedObject(file, 
-                            CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
-                            CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
-        soureFileObjs.append(buildObj)
+        if(type == "shared"):
+            buildObj = env.SharedObject(file, 
+                                CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
+                                CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
+            soureFileObjs.append(buildObj)
+        elif(type == "static"):
+            buildObj = env.Object(file, 
+                                CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
+                                CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
+            soureFileObjs.append(buildObj)
 
     if("Windows" in platform.system()):
         env['LINKCOM'].list[0].cmd_list = env['LINKCOM'].list[0].cmd_list.replace('",'," 2>&1 > \\\"" + env.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\",") 
     else:
         env['LINKCOM'] = env['LINKCOM'].replace('",'," > \\\"" + env.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\" 2>&1 ,") 
    
-    prog = env.SharedLibrary(progName, soureFileObjs)
+    if(type == "shared"):
+        prog = env.SharedLibrary(progName, soureFileObjs)
+    elif(type == "static"):
+        prog = env.StaticLibrary(progName, soureFileObjs)
 
     ###################################################
     # setup build output
@@ -761,11 +809,17 @@ def SetupBuildOutput(env, progName, sourceFiles):
     if("Windows" in platform.system()):
         builtBins.append("build/" + progName + ".exe")
     else:
-        builtBins.append('libzlib.so')
-        
-    Progress(ProgressCounter(sourceFiles, builtBins), interval=1)
+        extension = ""
+        if(type == 'shared'):
+            extension = ".so"
+        elif(type == 'static'):
+            extension = ".a"
 
-    return [env, prog]
+        builtBins.append('lib' + progName + extension)
+        
+    
+
+    return [env, prog, soureFileObjs]
 
 def SetupInstalls(env):
 
@@ -780,11 +834,9 @@ class ProgressCounter(object):
     FAIL = '\033[91m'
     ENDC = '\033[0m'
 
-    def __init__(self, sourceFiles, targetBinaries):
+    def __init__(self):
         self.count = 0.0
-        self.maxCount = float(len(sourceFiles))
-        self.progressSources = sourceFiles
-        self.targetBinaries = targetBinaries
+        
 
     def disable(self):
         self.HEADER = ''
@@ -793,6 +845,12 @@ class ProgressCounter(object):
         self.WARNING = ''
         self.FAIL = ''
         self.ENDC = ''
+
+    def resetProgress(self, sourceFiles, targetBinaries):
+        self.count = 0.0
+        self.maxCount = float(len(sourceFiles))
+        self.progressSources = sourceFiles
+        self.targetBinaries = targetBinaries
 
     def __call__(self, node, *args, **kw):
         #print(str(node))
@@ -807,6 +865,12 @@ class ProgressCounter(object):
         if(str(node).endswith(".obj") or str(node).endswith(".o") or str(node).endswith(".os")):
             slashedNodeObj = os.path.splitext(slashedNode)[0] + ".c"
             if(slashedNodeObj in self.progressSources ):
+                if(self.count == 0):
+                    startBuildString = "Building "
+                    for bin in self.targetBinaries:
+                        startBuildString += bin + ", "
+                    startBuildString = startBuildString[:-2]
+                    print(self.HEADER + "[   INFO] " + self.ENDC + startBuildString)
                 self.count += 1
                 percent = self.count / self.maxCount * 100.00
                 filename = os.path.basename(str(node))
@@ -815,7 +879,7 @@ class ProgressCounter(object):
                     percentString = " " + percentString
                 if(percent < 10):
                     percentString = " " + percentString
-                    
+                
                 if(node.get_state() == 2):
                     print(self.OKGREEN + "[" + percentString + "%] " + self.ENDC + "Compiling " + filename )
                 else:
@@ -884,21 +948,23 @@ def display_build_status():
         line = highlight_word(line, "warning", WARNING)
         print(line)
     linkOutput = []
+    buildLink = ""
     for filename in glob.glob('build/build_logs/*_link.txt'):
         f = open(filename, "r")
         tempList = f.read().splitlines()
         if(len(tempList) > 0):
-            linkOutput += [OKBLUE + os.path.basename(filename).replace("_link.txt", "") + ":" + ENDC]
+            buildLink = os.path.basename(filename).replace("_link.txt", "")
+            linkOutput += [OKBLUE + buildLink + ":" + ENDC]
             linkOutput += tempList
     for line in linkOutput:
         line = highlight_word(line, "error", FAIL)
         line = highlight_word(line, "warning", WARNING)
         print(line)
         
-    if status == 'failed':
-        print(FAIL + "Build failed." + ENDC)
-    elif status == 'ok':
-        print (OKGREEN + "Build succeeded." + ENDC)
+    #if status == 'failed':
+    #    print(FAIL + "Build of " + buildLink + " failed." + ENDC)
+    #elif status == 'ok':
+    #    print (OKGREEN + "Build of " + buildLink + " succeeded." + ENDC)
     
 
 build = CreateNewEnv()
