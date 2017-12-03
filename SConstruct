@@ -10,83 +10,26 @@ import atexit
 import platform
 import xml.etree.cElementTree as ET
 from cStringIO import StringIO
-import SCons.Action
 
+import SCons.Action
+import SCons.Script.Main
+
+HEADER = '\033[95m'
+OKBLUE = '\033[94m'
+OKGREEN = '\033[92m'
+WARNING = '\033[93m'
+FAIL = '\033[91m'
+ENDC = '\033[0m'
 
 def CreateNewEnv():
 
-    AddOption(
-        '--debug-build',
-        dest='option_debug',
-        action='store_true',
-        metavar='BOOL',
-        default=False,
-        help='Build debug libraries'
-    )
+    SetupOptions()
 
-    AddOption(
-        '--ASM686',
-        dest='option_asm686',
-        action='store_true',
-        metavar='BOOL',
-        default=False,
-        help='Enable building i686 assembly implementation'
-    )
-
-    AddOption(
-        '--AMD64',
-        dest='option_amd64',
-        action='store_true',
-        metavar='BOOL',
-        default=False,
-        help='Enable building amd64 assembly implementation'
-    )
-
-    AddOption(
-        '--zprefix',
-        dest='option_zprefix',
-        action='store_true',
-        metavar='BOOL',
-        default=False,
-        help='Precedes all external symbols with z_ to reduce probability of a symbol name collision'
-    )
-
-    AddOption(
-        '--solo',
-        dest='option_solo',
-        action='store_true',
-        metavar='BOOL',
-        default=False,
-        help='Used to compile and use zlib without the use of any external libraries.'
-    )
-
-    AddOption(
-        '--cover',
-        dest='option_cover',
-        action='store_true',
-        metavar='BOOL',
-        default=False,
-        help='code coverage testing was requested'
-    )
-
-    AddOption(
-        '--gcc-classic',
-        dest='option_gcc_classic',
-        action='store',
-        type='string',
-        metavar='STRING',
-        default='',
-        help='An alternate GCC to use in some cases such as Code Coverage testing.'
-    )
-
-    AddOption(
-        '--verbose',
-        dest='option_verbose',
-        action='store_true',
-        metavar='BOOL',
-        default=False,
-        help='View compiler output.'
-    )
+    if(not GetOption('option_verbose')):
+        scons_ver = SCons.__version__
+        if scons_ver[0] >= 3:
+            SetOption('silent', 1)
+        SCons.Script.Main.progress_display.set_mode(0)
 
     env = Environment(
         DEBUG_BUILD = GetOption('option_debug'),
@@ -100,7 +43,7 @@ def CreateNewEnv():
     ###################################################
     # Determine number of CPUs
     num_cpus = get_cpu_nums()
-    print ("Building with %d parallel jobs" % num_cpus)
+    print(HEADER + "[   INFO] " + ENDC + "Building with " + str(num_cpus) + " parallel jobs")
     env.SetOption( "num_jobs", num_cpus )
 
     env.baseProjectDir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
@@ -556,6 +499,29 @@ def ConfigureEnv(env):
 
     if not env.GetOption('clean'):
     
+        if(GetOption('option_reconfigure')):
+            os.remove('build.conf')
+
+        vars = Variables('build.conf')
+        
+        vars.Add('ZPREFIX', '' )
+        vars.Add('SOLO', '')
+        vars.Add('COVER', '')
+        vars.Update(env)
+
+        if('--zprefix' in sys.argv): env['ZPREFIX'] = GetOption('option_zprefix')
+        if('--solo' in sys.argv):    env['SOLO'] = GetOption('option_solo')
+        if('--cover' in sys.argv):   env['COVER'] = GetOption('option_cover')
+
+        vars.Save('build.conf', env)
+
+        configureString = "Configuring with "
+        if env['ZPREFIX']: configureString += "--zprefix "
+        if env['SOLO']:    configureString += "--solo "
+        if env['COVER']:   configureString += "--cover "
+
+        print(HEADER + "[   INFO] " + ENDC + configureString)
+
         conf = Configure(env,
             custom_tests = {
                 'CheckLargeFile64'     : CheckLargeFile64, 
@@ -825,6 +791,90 @@ def SetupInstalls(env):
 
     return env
     
+def SetupOptions():
+
+    AddOption(
+        '--debug-build',
+        dest='option_debug',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='Build debug libraries'
+    )
+
+    AddOption(
+        '--ASM686',
+        dest='option_asm686',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='Enable building i686 assembly implementation'
+    )
+
+    AddOption(
+        '--AMD64',
+        dest='option_amd64',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='Enable building amd64 assembly implementation'
+    )
+
+    AddOption(
+        '--zprefix',
+        dest='option_zprefix',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='Precedes all external symbols with z_ to reduce probability of a symbol name collision'
+    )
+
+    AddOption(
+        '--solo',
+        dest='option_solo',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='Used to compile and use zlib without the use of any external libraries.'
+    )
+
+    AddOption(
+        '--cover',
+        dest='option_cover',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='code coverage testing was requested'
+    )
+
+    AddOption(
+        '--gcc-classic',
+        dest='option_gcc_classic',
+        action='store',
+        type='string',
+        metavar='STRING',
+        default='',
+        help='An alternate GCC to use in some cases such as Code Coverage testing.'
+    )
+
+    AddOption(
+        '--verbose',
+        dest='option_verbose',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='View compiler output.'
+    )
+
+    AddOption(
+        '--reconfigure',
+        dest='option_reconfigure',
+        action='store_true',
+        metavar='BOOL',
+        default=False,
+        help='Clear out configuration and reconfigure with new options.'
+    )
+
 class ProgressCounter(object):
 
     HEADER = '\033[95m'
@@ -884,9 +934,6 @@ class ProgressCounter(object):
                     print(self.OKGREEN + "[" + percentString + "%] " + self.ENDC + "Compiling " + filename )
                 else:
                     print(self.OKGREEN + "[" + percentString + "%] " + self.ENDC + "Skipping, already built " + filename )
-
-
-
 
 def bf_to_str(bf):
     """Convert an element of GetBuildFailures() to a string
