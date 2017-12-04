@@ -626,7 +626,7 @@ def ConfigureEnv(env):
             #"GL",
         ])
 
-    elif platform == "darwin":
+    elif("darwin" in platform.system().lower()):
         print("XCode project not implemented yet")
     elif("win" in platform.system().lower() ):
 
@@ -683,7 +683,7 @@ def ConfigureEnv(env):
 def ConfigPlatformIDE(env, sourceFiles, headerFiles, resources, program):
     if platform == "linux" or platform == "linux2":
         print("Eclipse C++ project not implemented yet")
-    elif platform == "darwin":
+    elif("darwin" in platform.system().lower()):
         print("XCode project not implemented yet")
     elif("win" in platform.system().lower() ):
         variantSourceFiles = []
