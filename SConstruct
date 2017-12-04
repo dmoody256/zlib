@@ -10,7 +10,6 @@ import platform
 import SCons.Action
 import SCons.Script.Main
 
-
 def CreateNewEnv():
 
     SetupOptions()
@@ -29,8 +28,9 @@ def CreateNewEnv():
     env.SetOption( "num_jobs", num_cpus )
 
     env.baseProjectDir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
-    env.VariantDir(Dir('build'), Dir('.'), duplicate=0)
+    env.VariantDir(Dir('build'),      Dir('.'), duplicate=0)
     env.VariantDir(Dir('build/test'), Dir('./test'), duplicate=0)
+
     #if(MSVC)
     #    set(CMAKE_DEBUG_POSTFIX "d")
     #    add_definitions(-D_CRT_SECURE_NO_DEPRECATE)
