@@ -891,7 +891,7 @@ def SetupOptions():
 
     if(not GetOption('option_verbose')):
         scons_ver = SCons.__version__
-        if scons_ver[0] >= 3:
+        if int(scons_ver[0]) >= 3:
             SetOption('silent', 1)
         SCons.Script.Main.progress_display.set_mode(0)
 
