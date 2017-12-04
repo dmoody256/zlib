@@ -104,45 +104,47 @@ def CreateNewEnv():
     progCounter = ProgressCounter()
     resetProgressCallback = SCons.Action.ActionFactory( progCounter.resetProgress,
                                             lambda sourceFiles, targetBins: 'Reseting Progress Counter for ' + str(targetBins))
-
     progCounter.resetProgress(source_files, ['libzlib.so'])
 
     env = ConfigureEnv(env)
 
-    shared_env = env.Clone()
-    static_env = env.Clone()
-    exampleEnv = env.Clone()
-    minigzipEnv = env.Clone()
+    shared_env, shared_lib = SetupBuild(
+        env, 
+        'shared', 
+        'zlib', 
+        source_files
+    )
 
-    shared_env, shared_lib, shared_nodes    = SetupBuildOutput(shared_env, 'shared', 'zlib', source_files)
-    static_env, static_lib, static_nodes    = SetupBuildOutput(static_env, 'static', 'zlib', source_files)
-    
-    reset = static_env.Command( None, source_files, resetProgressCallback(source_files, ['libzlib.a']))
-    Depends(reset, shared_lib)
-    for node in static_nodes:
-        Depends(node, reset)
+    static_env, static_lib = SetupBuild(
+        env, 
+        'static', 
+        'zlib',
+        source_files, 
+        resetProgressCallback, 
+        shared_lib
+    )
 
-    exampleEnv, example_bin, example_nodes  = SetupBuildOutput(exampleEnv, 'exec', 'example', ['build/test/example.c'])
-    Depends(example_bin, static_lib)
-    exampleEnv.Append(LIBPATH=[Dir('.')])
-    exampleEnv.Append(LIBS=['libzlib.a'])
+    example_env, example_bin = SetupBuild(
+        env, 
+        'exec', 
+        'example', 
+        ['build/test/example.c'], 
+        resetProgressCallback, 
+        static_lib
+    )
+    example_env.Append(LIBPATH=[Dir('.')])
+    example_env.Append(LIBS=['libzlib.a'])
 
-   
-    reset2 = exampleEnv.Command( None, ['build/test/example.c'], resetProgressCallback(['build/test/example.c'], ['example']))
-    Depends(reset2, static_lib)
-    for node in example_nodes:
-        Depends(node, reset2)
-
-    minigzipEnv, minigzip_bin, minigzip_nodes  = SetupBuildOutput(minigzipEnv, 'exec', 'minigzip', ['build/test/minigzip.c'])
-    Depends(minigzip_bin, example_bin)
-    minigzipEnv.Append(LIBPATH=[Dir('.')])
-    minigzipEnv.Append(LIBS=['libzlib.a'])
-
-   
-    reset3 = minigzipEnv.Command( None, ['build/test/minigzip.c'], resetProgressCallback(['build/test/minigzip.c'], ['minigzip']))
-    Depends(reset3, example_bin)
-    for node in minigzip_nodes:
-        Depends(node, reset3)
+    minigzip_env, minigzip_bin  = SetupBuild(
+        env, 
+        'exec', 
+        'minigzip', 
+        ['build/test/minigzip.c'], 
+        resetProgressCallback, 
+        example_bin
+    )
+    minigzip_env.Append(LIBPATH=[Dir('.')])
+    minigzip_env.Append(LIBS=['libzlib.a'])
 
     #env = SetupInstalls(env)
     #env = ConfigPlatformIDE(env, source_files, headerFiles, resourceFiles, prog)
@@ -612,6 +614,7 @@ def ConfigureEnv(env):
 
         env.Append(CCFLAGS=[
             debugFlag,
+            '-O3',
             #'-fPIC',
             #"-rdynamic",
         ])
@@ -736,7 +739,9 @@ def get_cpu_nums():
         return ncpus
     return 1 # Default
 
-def SetupBuildOutput(env, type, progName, sourceFiles):
+def SetupBuild(env, type, progName, sourceFiles, resetCallback = None, previousBuild = None):
+
+    buildEnv = env.Clone()
 
     windowsRedirect = ""
     linuxRedirect = "2>&1"
@@ -747,32 +752,32 @@ def SetupBuildOutput(env, type, progName, sourceFiles):
     soureFileObjs = []
     for file in sourceFiles:
         if(type == "shared"):
-            buildObj = env.SharedObject(file, 
-                                CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
-                                CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
+            buildObj = buildEnv.SharedObject(file, 
+                                CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + buildEnv.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
+                                CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + buildEnv.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
             soureFileObjs.append(buildObj)
         elif(type == "static" or type == 'exec'):
-            buildObj = env.Object(file, 
-                                CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
-                                CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
+            buildObj = buildEnv.Object(file, 
+                                CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + buildEnv.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
+                                CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + buildEnv.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
             soureFileObjs.append(buildObj)
 
     if("Windows" in platform.system()):
-        env['LINKCOM'].list[0].cmd_list = env['LINKCOM'].list[0].cmd_list.replace('",'," 2>&1 > \\\"" + env.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\",") 
+        env['LINKCOM'].list[0].cmd_list = env['LINKCOM'].list[0].cmd_list.replace('",'," 2>&1 > \\\"" + buildEnv.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\",") 
     else:
-        env['LINKCOM'] = env['LINKCOM'].replace('",'," > \\\"" + env.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\" 2>&1 ,") 
+        env['LINKCOM'] = env['LINKCOM'].replace('",'," > \\\"" + buildEnv.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\" 2>&1 ,") 
    
     if(type == "shared"):
-        prog = env.SharedLibrary(progName, soureFileObjs)
+        prog = buildEnv.SharedLibrary(progName, soureFileObjs)
     elif(type == "static"):
-        prog = env.StaticLibrary(progName, soureFileObjs)
+        prog = buildEnv.StaticLibrary(progName, soureFileObjs)
     elif(type == 'exec'):
-        prog = env.Program(progName, soureFileObjs)
+        prog = buildEnv.Program(progName, soureFileObjs)
 
     ###################################################
     # setup build output
-    if not os.path.exists(env.baseProjectDir + "/build/build_logs"):
-        os.makedirs(env.baseProjectDir + "/build/build_logs")
+    if not os.path.exists(buildEnv.baseProjectDir + "/build/build_logs"):
+        os.makedirs(buildEnv.baseProjectDir + "/build/build_logs")
 
     if ARGUMENTS.get('fail', 0):
         Command('target', 'source', ['/bin/false'])
@@ -780,7 +785,7 @@ def SetupBuildOutput(env, type, progName, sourceFiles):
     atexit.register(display_build_status)
 
     def print_cmd_line(s, targets, sources, env):
-        with open(env.baseProjectDir + "/build/build_logs/build_" + env['BUILD_LOG_TIME'] + ".log", "a") as f:
+        with open(buildEnv.baseProjectDir + "/build/build_logs/build_" + env['BUILD_LOG_TIME'] + ".log", "a") as f:
             f.write(s + "\n")
 
     env['BUILD_LOG_TIME'] = datetime.datetime.fromtimestamp(time.time()).strftime('%Y_%m_%d__%H_%M_%S')
@@ -798,7 +803,13 @@ def SetupBuildOutput(env, type, progName, sourceFiles):
         elif(type == 'exec'):
             builtBins.append( progName )
 
-    return [env, prog, soureFileObjs]
+    if(not resetCallback == None and not previousBuild == None):
+        reset = buildEnv.Command( None, sourceFiles, resetCallback(sourceFiles, builtBins))
+        Depends(reset, previousBuild)
+        for node in soureFileObjs:
+            Depends(node, reset)
+
+    return [buildEnv, prog]
 
 def SetupInstalls(env):
 
