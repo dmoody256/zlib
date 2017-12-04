@@ -25,12 +25,6 @@ def CreateNewEnv():
 
     SetupOptions()
 
-    if(not GetOption('option_verbose')):
-        scons_ver = SCons.__version__
-        if scons_ver[0] >= 3:
-            SetOption('silent', 1)
-        SCons.Script.Main.progress_display.set_mode(0)
-
     env = Environment(
         DEBUG_BUILD = GetOption('option_debug'),
         ZPREFIX = GetOption('option_zprefix'),
@@ -40,15 +34,13 @@ def CreateNewEnv():
         VERBOSE_COMPILE = GetOption('option_verbose'),
     )
 
-    ###################################################
-    # Determine number of CPUs
     num_cpus = get_cpu_nums()
     print(HEADER + "[   INFO] " + ENDC + "Building with " + str(num_cpus) + " parallel jobs")
     env.SetOption( "num_jobs", num_cpus )
 
     env.baseProjectDir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
     env.VariantDir(Dir('build'), Dir('.'), duplicate=0)
-
+    env.VariantDir(Dir('build/test'), Dir('./test'), duplicate=0)
     #if(MSVC)
     #    set(CMAKE_DEBUG_POSTFIX "d")
     #    add_definitions(-D_CRT_SECURE_NO_DEPRECATE)
@@ -111,24 +103,48 @@ def CreateNewEnv():
 
     progCounter = ProgressCounter()
     resetProgressCallback = SCons.Action.ActionFactory( progCounter.resetProgress,
-                                            lambda sourceFiles, targetBins: 'Reseting Progress Counter...')
+                                            lambda sourceFiles, targetBins: 'Reseting Progress Counter for ' + str(targetBins))
 
     progCounter.resetProgress(source_files, ['libzlib.so'])
 
-    env, shared_lib, shared_nodes = SetupBuildOutput(env, 'shared', 'zlib', source_files)
-    env, static_lib, static_nodes = SetupBuildOutput(env, 'static', 'zlib', source_files)
-   
-    shared_build = []
-    shared_build.append(shared_lib)
-    shared_build.extend(shared_nodes)
+    env = ConfigureEnv(env)
 
-    reset = env.Command( None, shared_build, resetProgressCallback(source_files, ['libzlib.a']))
+    shared_env = env.Clone()
+    static_env = env.Clone()
+    exampleEnv = env.Clone()
+    minigzipEnv = env.Clone()
+
+    shared_env, shared_lib, shared_nodes    = SetupBuildOutput(shared_env, 'shared', 'zlib', source_files)
+    static_env, static_lib, static_nodes    = SetupBuildOutput(static_env, 'static', 'zlib', source_files)
+    
+    reset = static_env.Command( None, source_files, resetProgressCallback(source_files, ['libzlib.a']))
+    Depends(reset, shared_lib)
     for node in static_nodes:
         Depends(node, reset)
-        Depends(node, shared_build)
 
-    env = SetupInstalls(env)
-    env = ConfigureEnv(env)
+    exampleEnv, example_bin, example_nodes  = SetupBuildOutput(exampleEnv, 'exec', 'example', ['build/test/example.c'])
+    Depends(example_bin, static_lib)
+    exampleEnv.Append(LIBPATH=[Dir('.')])
+    exampleEnv.Append(LIBS=['libzlib.a'])
+
+   
+    reset2 = exampleEnv.Command( None, ['build/test/example.c'], resetProgressCallback(['build/test/example.c'], ['example']))
+    Depends(reset2, static_lib)
+    for node in example_nodes:
+        Depends(node, reset2)
+
+    minigzipEnv, minigzip_bin, minigzip_nodes  = SetupBuildOutput(minigzipEnv, 'exec', 'minigzip', ['build/test/minigzip.c'])
+    Depends(minigzip_bin, example_bin)
+    minigzipEnv.Append(LIBPATH=[Dir('.')])
+    minigzipEnv.Append(LIBS=['libzlib.a'])
+
+   
+    reset3 = minigzipEnv.Command( None, ['build/test/minigzip.c'], resetProgressCallback(['build/test/minigzip.c'], ['minigzip']))
+    Depends(reset3, example_bin)
+    for node in minigzip_nodes:
+        Depends(node, reset3)
+
+    #env = SetupInstalls(env)
     #env = ConfigPlatformIDE(env, source_files, headerFiles, resourceFiles, prog)
 
     Progress(progCounter, interval=1)
@@ -722,8 +738,6 @@ def get_cpu_nums():
 
 def SetupBuildOutput(env, type, progName, sourceFiles):
 
-    
-
     windowsRedirect = ""
     linuxRedirect = "2>&1"
     if("Windows" in platform.system()):
@@ -737,7 +751,7 @@ def SetupBuildOutput(env, type, progName, sourceFiles):
                                 CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
                                 CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
             soureFileObjs.append(buildObj)
-        elif(type == "static"):
+        elif(type == "static" or type == 'exec'):
             buildObj = env.Object(file, 
                                 CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
                                 CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + env.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
@@ -752,6 +766,8 @@ def SetupBuildOutput(env, type, progName, sourceFiles):
         prog = env.SharedLibrary(progName, soureFileObjs)
     elif(type == "static"):
         prog = env.StaticLibrary(progName, soureFileObjs)
+    elif(type == 'exec'):
+        prog = env.Program(progName, soureFileObjs)
 
     ###################################################
     # setup build output
@@ -775,15 +791,12 @@ def SetupBuildOutput(env, type, progName, sourceFiles):
     if("Windows" in platform.system()):
         builtBins.append("build/" + progName + ".exe")
     else:
-        extension = ""
         if(type == 'shared'):
-            extension = ".so"
+            builtBins.append('lib' + progName + ".so")
         elif(type == 'static'):
-            extension = ".a"
-
-        builtBins.append('lib' + progName + extension)
-        
-    
+            builtBins.append('lib' + progName + ".a")
+        elif(type == 'exec'):
+            builtBins.append( progName )
 
     return [env, prog, soureFileObjs]
 
@@ -874,6 +887,12 @@ def SetupOptions():
         default=False,
         help='Clear out configuration and reconfigure with new options.'
     )
+
+    if(not GetOption('option_verbose')):
+        scons_ver = SCons.__version__
+        if scons_ver[0] >= 3:
+            SetOption('silent', 1)
+        SCons.Script.Main.progress_display.set_mode(0)
 
 class ProgressCounter(object):
 
