@@ -161,7 +161,7 @@ def ConfigureEnv(env):
         context.Result(result)
         return result
 
-    def CheckFseeko():
+    def CheckFseeko(context):
         context.Message('Checking for fseeko... ')
         result = context.TryCompile("""
         #include <stdio.h>
@@ -196,7 +196,7 @@ def ConfigureEnv(env):
         context.Result(result)
         return result
 
-    def CheckSizeTPointerSize(longlong_result):
+    def CheckSizeTPointerSize(context, longlong_result):
         result = []
         context.Message('Checking for a pointer-size integer type... ')
         if longlong_result:
