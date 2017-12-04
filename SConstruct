@@ -1,41 +1,31 @@
 import os
-import json
 import sys
-import logging
 import glob
 import re
 import time
 import datetime
 import atexit
 import platform
-import xml.etree.cElementTree as ET
-from cStringIO import StringIO
 
 import SCons.Action
 import SCons.Script.Main
 
-HEADER = '\033[95m'
-OKBLUE = '\033[94m'
-OKGREEN = '\033[92m'
-WARNING = '\033[93m'
-FAIL = '\033[91m'
-ENDC = '\033[0m'
 
 def CreateNewEnv():
 
     SetupOptions()
 
     env = Environment(
-        DEBUG_BUILD = GetOption('option_debug'),
-        ZPREFIX = GetOption('option_zprefix'),
-        SOLO = GetOption('option_solo'),   
-        COVER = GetOption('option_cover'),   
-        GCC_CLASSIC = GetOption('option_gcc_classic'),
+        DEBUG_BUILD     = GetOption('option_debug'),
+        ZPREFIX         = GetOption('option_zprefix'),
+        SOLO            = GetOption('option_solo'),   
+        COVER           = GetOption('option_cover'),   
+        GCC_CLASSIC     = GetOption('option_gcc_classic'),
         VERBOSE_COMPILE = GetOption('option_verbose'),
     )
 
     num_cpus = get_cpu_nums()
-    print(HEADER + "[   INFO] " + ENDC + "Building with " + str(num_cpus) + " parallel jobs")
+    ColorPrinter().InfoPrint("Building with " + str(num_cpus) + " parallel jobs")
     env.SetOption( "num_jobs", num_cpus )
 
     env.baseProjectDir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
@@ -102,9 +92,9 @@ def CreateNewEnv():
     ]
 
     progCounter = ProgressCounter()
-    resetProgressCallback = SCons.Action.ActionFactory( progCounter.resetProgress,
-                                            lambda sourceFiles, targetBins: 'Reseting Progress Counter for ' + str(targetBins))
-    progCounter.resetProgress(source_files, ['libzlib.so'])
+    reset_callback = SCons.Action.ActionFactory( progCounter.ResetProgress,
+                                            lambda source_files, target_bins: 'Reseting Progress Counter for ' + str(target_bins))
+    progCounter.ResetProgress(source_files, ['libzlib.so'])
 
     env = ConfigureEnv(env)
 
@@ -120,7 +110,7 @@ def CreateNewEnv():
         'static', 
         'zlib',
         source_files, 
-        resetProgressCallback, 
+        reset_callback, 
         shared_lib
     )
 
@@ -129,7 +119,7 @@ def CreateNewEnv():
         'exec', 
         'example', 
         ['build/test/example.c'], 
-        resetProgressCallback, 
+        reset_callback, 
         static_lib
     )
     example_env.Append(LIBPATH=[Dir('.')])
@@ -140,7 +130,7 @@ def CreateNewEnv():
         'exec', 
         'minigzip', 
         ['build/test/minigzip.c'], 
-        resetProgressCallback, 
+        reset_callback, 
         example_bin
     )
     minigzip_env.Append(LIBPATH=[Dir('.')])
@@ -538,7 +528,7 @@ def ConfigureEnv(env):
         if env['SOLO']:    configureString += "--solo "
         if env['COVER']:   configureString += "--cover "
 
-        print(HEADER + "[   INFO] " + ENDC + configureString)
+        ColorPrinter().InfoPrint(configureString)
 
         conf = Configure(env,
             custom_tests = {
@@ -907,63 +897,51 @@ def SetupOptions():
 
 class ProgressCounter(object):
 
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-
     def __init__(self):
         self.count = 0.0
-        
-
-    def disable(self):
-        self.HEADER = ''
-        self.OKBLUE = ''
-        self.OKGREEN = ''
-        self.WARNING = ''
-        self.FAIL = ''
-        self.ENDC = ''
-
-    def resetProgress(self, sourceFiles, targetBinaries):
-        self.count = 0.0
-        self.maxCount = float(len(sourceFiles))
-        self.progressSources = sourceFiles
-        self.targetBinaries = targetBinaries
+        self.printer = ColorPrinter()
+        self.max_count = 1.0
+        self.progress_sources = []
+        self.target_binaries = []
 
     def __call__(self, node, *args, **kw):
         #print(str(node))
-        slashedNode = str(node).replace("\\", "/")
-        if(slashedNode in self.targetBinaries):
-            filename = os.path.basename(str(node))
-            if(node.get_state() == 2):
-                print(self.OKGREEN + "[   LINK] " + self.ENDC + "Linking " +  filename )
-            else:
-                print(self.OKGREEN + "[   LINK] " + self.ENDC + "Skipping, already built " +  filename )
-        
-        if(str(node).endswith(".obj") or str(node).endswith(".o") or str(node).endswith(".os")):
-            slashedNodeObj = os.path.splitext(slashedNode)[0] + ".c"
-            if(slashedNodeObj in self.progressSources ):
+
+        slashed_node = str(node).replace("\\", "/")
+        if(slashed_node in self.target_binaries):
+            filename = os.path.basename(slashed_node)
+            if(node.get_state() == 2): self.printer.LinkPrint("Linking " + filename)
+            else:                      self.printer.LinkPrint("Skipping, already built " + filename)
+
+        # TODO: make hanlding this file extensions better
+        if(   slashed_node.endswith(".obj") 
+           or slashed_node.endswith(".o"  ) 
+           or slashed_node.endswith(".os" ) ):
+
+            slashed_node_file = os.path.splitext(slashed_node)[0] + ".c"
+            if(slashed_node_file in self.progress_sources ):
+
                 if(self.count == 0):
-                    startBuildString = "Building "
-                    for bin in self.targetBinaries:
-                        startBuildString += bin + ", "
-                    startBuildString = startBuildString[:-2]
-                    print(self.HEADER + "[   INFO] " + self.ENDC + startBuildString)
+                    start_build_string = "Building "
+                    for bin in self.target_binaries:
+                        start_build_string += bin + ", "
+                    start_build_string = start_build_string[:-2]
+                    self.printer.InfoPrint(start_build_string)
+
                 self.count += 1
-                percent = self.count / self.maxCount * 100.00
-                filename = os.path.basename(str(node))
-                percentString = "{0:.2f}".format(percent)
-                if(percent < 100):
-                    percentString = " " + percentString
-                if(percent < 10):
-                    percentString = " " + percentString
+                percent = self.count / self.max_count * 100.00
+                filename = os.path.basename(slashed_node)
                 
-                if(node.get_state() == 2):
-                    print(self.OKGREEN + "[" + percentString + "%] " + self.ENDC + "Compiling " + filename )
-                else:
-                    print(self.OKGREEN + "[" + percentString + "%] " + self.ENDC + "Skipping, already built " + filename )
+                if(node.get_state() == 2): 
+                    self.printer.CompilePrint( percent, "Compiling " + filename )
+                else:                      
+                    self.printer.CompilePrint( percent, "Skipping, already built " + filename )
+
+    def ResetProgress(self, source_files, target_binaries):
+        self.count = 0.0
+        self.max_count = float(len(source_files))
+        self.progress_sources = source_files
+        self.target_binaries = target_binaries
 
 def bf_to_str(bf):
     """Convert an element of GetBuildFailures() to a string
@@ -1042,7 +1020,28 @@ def display_build_status():
     #    print(FAIL + "Build of " + buildLink + " failed." + ENDC)
     #elif status == 'ok':
     #    print (OKGREEN + "Build of " + buildLink + " succeeded." + ENDC)
-    
 
-build = CreateNewEnv()
-Return('build')
+class ColorPrinter():
+
+    def __init__(self):
+        self.HEADER = '\033[95m'
+        self.OKBLUE = '\033[94m'
+        self.OKGREEN = '\033[92m'
+        self.WARNING = '\033[93m'
+        self.FAIL = '\033[91m'
+        self.ENDC = '\033[0m'
+
+    def InfoPrint(self, message):
+        print(self.HEADER + "[   INFO] " + self.ENDC + message)
+
+    def CompilePrint(self, percent, message):
+        percent_string = "{0:.2f}".format(percent)
+        if(percent < 100): percent_string = " " + percent_string
+        if(percent < 10):  percent_string = " " + percent_string
+        print(self.OKGREEN + "[" + percent_string + "%] " + self.ENDC + message )
+
+    def LinkPrint(self, message):
+        print(self.OKGREEN + "[   LINK] " + self.ENDC + message)
+
+
+CreateNewEnv()
