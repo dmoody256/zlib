@@ -23,123 +23,73 @@ def CreateNewEnv():
         VERBOSE_COMPILE = GetOption('option_verbose'),
     )
 
+    env.project_dir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
+    env.build_dir = 'build'
+
     num_cpus = get_cpu_nums()
     ColorPrinter().InfoPrint("Building with " + str(num_cpus) + " parallel jobs")
     env.SetOption( "num_jobs", num_cpus )
 
-    env.baseProjectDir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
-    env.VariantDir(Dir('build'),      Dir('.'), duplicate=0)
-    env.VariantDir(Dir('build/test'), Dir('./test'), duplicate=0)
+    env.VariantDir(env.build_dir,           Dir('.'), duplicate=0)
+    env.VariantDir(env.build_dir + '/test', Dir('./test'), duplicate=0)
 
-    #if(MSVC)
-    #    set(CMAKE_DEBUG_POSTFIX "d")
-    #    add_definitions(-D_CRT_SECURE_NO_DEPRECATE)
-    #    add_definitions(-D_CRT_NONSTDC_NO_DEPRECATE)
-    #    include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-    #endif()
-
-    source_files = [
-        'build/adler32.c',
-        'build/compress.c',
-        'build/crc32.c',
-        'build/deflate.c',
-        'build/gzclose.c',
-        'build/gzlib.c',
-        'build/gzread.c',
-        'build/gzwrite.c',
-        'build/inflate.c',
-        'build/infback.c',
-        'build/inftrees.c',
-        'build/inffast.c',
-        'build/trees.c',
-        'build/uncompr.c',
-        'build/zutil.c',
+    base_source_files = [
+        env.build_dir + '/adler32.c',
+        env.build_dir + '/compress.c',
+        env.build_dir + '/crc32.c',
+        env.build_dir + '/deflate.c',
+        env.build_dir + '/gzclose.c',
+        env.build_dir + '/gzlib.c',
+        env.build_dir + '/gzread.c',
+        env.build_dir + '/gzwrite.c',
+        env.build_dir + '/inflate.c',
+        env.build_dir + '/infback.c',
+        env.build_dir + '/inftrees.c',
+        env.build_dir + '/inffast.c',
+        env.build_dir + '/trees.c',
+        env.build_dir + '/uncompr.c',
+        env.build_dir + '/zutil.c',
     ]
 
-    headerFiles = []
+    base_header_files = [
 
-    libType = "ReleaseBuild"
-    if(env['DEBUG_BUILD']):
-        libType = 'DebugBuild'
-        env.Append(CPPDEFINES=[
-        ])
-
-    env.Append(CPPDEFINES=[
-    ])
-
-    env.Append(CPPPATH=[
-
-    ])    
-        
-    env.Append(LIBPATH=[
-
-    ])
-
-    libs = [
-        
-    ]
-    if(env['DEBUG_BUILD']):
-        libs = [ 
-        ]
-    
-    env.Append(LIBS=libs)
-    env.Append(LIBS=[
-
-    ])
-    
-    resourceFiles = [
-        
     ]
 
-    progCounter = ProgressCounter()
-    reset_callback = SCons.Action.ActionFactory( progCounter.ResetProgress,
+    distrib_header_files = [
+
+    ]
+
+    prog_counter = ProgressCounter()
+    reset_callback = SCons.Action.ActionFactory( prog_counter.ResetProgress,
                                             lambda source_files, target_bins: 'Reseting Progress Counter for ' + str(target_bins))
-    progCounter.ResetProgress(source_files, ['libzlib.so'])
-
+    
+    prog_counter.ResetProgress(base_source_files, ['build/libz.so'])
     env = ConfigureEnv(env)
 
     shared_env, shared_lib = SetupBuild(
-        env, 
-        'shared', 
-        'zlib', 
-        source_files
+        env, 'shared', 'z', base_source_files, reset_callback
     )
 
     static_env, static_lib = SetupBuild(
-        env, 
-        'static', 
-        'zlib',
-        source_files, 
-        reset_callback, 
-        shared_lib
+        env, 'static', 'z', base_source_files, reset_callback, shared_lib
     )
 
     example_env, example_bin = SetupBuild(
-        env, 
-        'exec', 
-        'example', 
-        ['build/test/example.c'], 
-        reset_callback, 
-        static_lib
+        env, 'exec', 'example', ['build/test/example.c'], reset_callback, static_lib
     )
     example_env.Append(LIBPATH=[Dir('.')])
-    example_env.Append(LIBS=['libzlib.a'])
+    example_env.Append(LIBS=['libz.a'])
 
     minigzip_env, minigzip_bin  = SetupBuild(
-        env, 
-        'exec', 
-        'minigzip', 
-        ['build/test/minigzip.c'], 
-        reset_callback, 
-        example_bin
+        env, 'exec', 'minigzip', ['build/test/minigzip.c'], reset_callback, example_bin
     )
     minigzip_env.Append(LIBPATH=[Dir('.')])
-    minigzip_env.Append(LIBS=['libzlib.a'])
+    minigzip_env.Append(LIBS=['libz.a'])
 
     #env = SetupInstalls(env)
     #env = ConfigPlatformIDE(env, source_files, headerFiles, resourceFiles, prog)
 
-    Progress(progCounter, interval=1)
+    Progress(prog_counter, interval=1)
     
 def ConfigureEnv(env):
 
@@ -148,29 +98,29 @@ def ConfigureEnv(env):
     def CheckLargeFile64(context):
         context.Message(p.ConfigString('Checking for off64_t... ') )
 
-        prevDefines = ""
+        prev_defines = ""
         if('CPPDEFINES' in context.env):
-            prevDefines = context.env['CPPDEFINES']
+            prev_defines = context.env['CPPDEFINES']
 
         context.env.Append(CPPDEFINES=['_LARGEFILE64_SOURCE=1'])
         result = context.TryCompile("""
-        #include <sys/types.h>
-        off64_t dummy = 0;
+            #include <sys/types.h>
+            off64_t dummy = 0;
         """, 
         '.c')
         if not result:
-            context.env.Replace(CPPDEFINES = prevDefines)
+            context.env.Replace(CPPDEFINES = prev_defines)
         context.Result(result)
         return result
 
     def CheckFseeko(context):
         context.Message(p.ConfigString('Checking for fseeko... ') )
         result = context.TryCompile("""
-        #include <stdio.h>
-        int main(void) {
-            fseeko(NULL, 0, 0);
-            return 0;
-        }
+            #include <stdio.h>
+            int main(void) {
+                fseeko(NULL, 0, 0);
+                return 0;
+            }
         """, 
         '.c')
         if not result:
@@ -181,9 +131,9 @@ def ConfigureEnv(env):
     def CheckSizeT(context):
         context.Message(p.ConfigString('Checking for size_t... ') )
         result = context.TryCompile("""
-        #include <stdio.h>
-        #include <stdlib.h>
-        size_t dummy = 0;
+            #include <stdio.h>
+            #include <stdlib.h>
+            size_t dummy = 0;
         """, 
         '.c')
         context.Result(result)
@@ -192,7 +142,7 @@ def ConfigureEnv(env):
     def CheckSizeTLongLong(context):
         context.Message(p.ConfigString('Checking for long long... ') )
         result = context.TryCompile("""
-        long long dummy = 0;
+            long long dummy = 0;
         """, 
         '.c')
         context.Result(result)
@@ -203,23 +153,23 @@ def ConfigureEnv(env):
         context.Message(p.ConfigString('Checking for a pointer-size integer type... ') )
         if longlong_result:
             result = context.TryRun("""
-            #include <stdio.h>
-            int main(void) {
-                if (sizeof(void *) <= sizeof(int)) puts("int");
-                else if (sizeof(void *) <= sizeof(long)) puts("long");
-                else puts("z_longlong");
-                return 0;
-            }
+                #include <stdio.h>
+                int main(void) {
+                    if (sizeof(void *) <= sizeof(int)) puts("int");
+                    else if (sizeof(void *) <= sizeof(long)) puts("long");
+                    else puts("z_longlong");
+                    return 0;
+                }
             """,
             '.c')
         else:
             result = context.TryRun("""
-            #include <stdio.h>
-            int main(void) {
-                if (sizeof(void *) <= sizeof(int)) puts("int");
-                else puts("long");
-                return 0;
-            }
+                #include <stdio.h>
+                int main(void) {
+                    if (sizeof(void *) <= sizeof(int)) puts("int");
+                    else puts("long");
+                    return 0;
+                }
             """, 
             '.c')
         
@@ -234,8 +184,8 @@ def ConfigureEnv(env):
     def CheckSharedLibrary(context):
         context.Message(p.ConfigString( 'Checking for shared library support... ') )
         result = context.TryBuild(context.env.SharedLibrary, """
-        extern int getchar();
-        int hello() {return getchar();}
+            extern int getchar();
+            int hello() {return getchar();}
         """,
         '.c')
 
@@ -245,8 +195,8 @@ def ConfigureEnv(env):
     def CheckUnistdH(context):
         context.Message(p.ConfigString('Checking for unistd.h... ') )
         result = context.TryCompile("""
-        #include <unistd.h>
-        int main() { return 0; }
+            #include <unistd.h>
+            int main() { return 0; }
         """, 
         '.c')
         if result:
@@ -260,9 +210,9 @@ def ConfigureEnv(env):
     def CheckStrerror(context):
         context.Message(p.ConfigString('Checking for strerror... ') )
         result = context.TryCompile("""
-        #include <string.h>
-        #include <errno.h>
-        int main() { return strlen(strerror(errno)); }
+            #include <string.h>
+            #include <errno.h>
+            int main() { return strlen(strerror(errno)); }
         """, 
         '.c')
         if not result:
@@ -273,8 +223,8 @@ def ConfigureEnv(env):
     def CheckStdargH(context):
         context.Message(p.ConfigString('Checking for stdarg.h... ') )
         result = context.TryCompile("""
-        #include <stdarg.h>
-        int main() { return 0; }
+            #include <stdarg.h>
+            int main() { return 0; }
         """, 
         '.c')
         if result:
@@ -317,16 +267,16 @@ def ConfigureEnv(env):
     def CheckVsnprintf(context):
         context.Message(p.ConfigString("Checking whether to use vs[n]printf() or s[n]printf()... ") )
         result = context.TryCompile("""
-        #include <stdio.h>
-        #include <stdarg.h>
-        #include "zconf.h"
-        int main()
-        {
-        #ifndef STDC
-            choke me
-        #endif
-            return 0;
-        }
+            #include <stdio.h>
+            #include <stdarg.h>
+            #include "zconf.h"
+            int main()
+            {
+            #ifndef STDC
+                choke me
+            #endif
+                return 0;
+            }
         """, 
         '.c')
         if result:
@@ -338,21 +288,21 @@ def ConfigureEnv(env):
     def CheckVsnStdio(context):
         context.Message(p.ConfigString("Checking for vsnprintf() in stdio.h... ") )
         result = context.TryCompile("""
-        #include <stdio.h>
-        #include <stdarg.h>
-        int mytest(const char *fmt, ...)
-        {
-            char buf[20];
-            va_list ap;
-            va_start(ap, fmt);
-            vsnprintf(buf, sizeof(buf), fmt, ap);
-            va_end(ap);
-            return 0;
-        }
-        int main()
-        {
-            return (mytest("Hello%d\\n", 1));
-        }
+            #include <stdio.h>
+            #include <stdarg.h>
+            int mytest(const char *fmt, ...)
+            {
+                char buf[20];
+                va_list ap;
+                va_start(ap, fmt);
+                vsnprintf(buf, sizeof(buf), fmt, ap);
+                va_end(ap);
+                return 0;
+            }
+            int main()
+            {
+                return (mytest("Hello%d\\n", 1));
+            }
         """, 
         '.c')
         context.Result(result)
@@ -366,22 +316,22 @@ def ConfigureEnv(env):
     def CheckVsnprintfReturn(context):
         context.Message(p.ConfigString("Checking for return value of vsnprintf()... ") )
         result = context.TryCompile("""
-        #include <stdio.h>
-        #include <stdarg.h>
-        int mytest(const char *fmt, ...)
-        {
-            int n;
-            char buf[20];
-            va_list ap;
-            va_start(ap, fmt);
-            n = vsnprintf(buf, sizeof(buf), fmt, ap);
-            va_end(ap);
-            return n;
-        }
-        int main()
-        {
-            return (mytest("Hello%d\\n", 1));
-        }
+            #include <stdio.h>
+            #include <stdarg.h>
+            int mytest(const char *fmt, ...)
+            {
+                int n;
+                char buf[20];
+                va_list ap;
+                va_start(ap, fmt);
+                n = vsnprintf(buf, sizeof(buf), fmt, ap);
+                va_end(ap);
+                return n;
+            }
+            int main()
+            {
+                return (mytest("Hello%d\\n", 1));
+            }
         """, 
         '.c')
         context.Result(result)
@@ -395,22 +345,22 @@ def ConfigureEnv(env):
     def CheckVsprintfReturn(context):
         context.Message(p.ConfigString( "Checking for return value of vsnprintf()... ") )
         result = context.TryCompile("""
-        #include <stdio.h>
-        #include <stdarg.h>
-        int mytest(const char *fmt, ...)
-        {
-            int n;
-            char buf[20];
-            va_list ap;
-            va_start(ap, fmt);
-            n = vsprintf(buf, fmt, ap);
-            va_end(ap);
-            return n;
-        }
-        int main()
-        {
-            return (mytest("Hello%d\\n", 1));
-        }
+            #include <stdio.h>
+            #include <stdarg.h>
+            int mytest(const char *fmt, ...)
+            {
+                int n;
+                char buf[20];
+                va_list ap;
+                va_start(ap, fmt);
+                n = vsprintf(buf, fmt, ap);
+                va_end(ap);
+                return n;
+            }
+            int main()
+            {
+                return (mytest("Hello%d\\n", 1));
+            }
         """, 
         '.c')
         context.Result(result)
@@ -424,17 +374,17 @@ def ConfigureEnv(env):
     def CheckSnStdio(context):
         context.Message(p.ConfigString("Checking for snprintf() in stdio.h... ") )
         result = context.TryCompile("""
-        #include <stdio.h>
-        int mytest()
-        {
-            char buf[20];
-            snprintf(buf, sizeof(buf), "%s", "foo");
-            return 0;
-        }
-        int main()
-        {
-            return (mytest());
-        }
+            #include <stdio.h>
+            int mytest()
+            {
+                char buf[20];
+                snprintf(buf, sizeof(buf), "%s", "foo");
+                return 0;
+            }
+            int main()
+            {
+                return (mytest());
+            }
         """, 
         '.c')
         context.Result(result)
@@ -448,16 +398,16 @@ def ConfigureEnv(env):
     def CheckSnprintfReturn(context):
         context.Message(p.ConfigString("Checking for return value of snprintf()... ") )
         result = context.TryCompile("""
-        #include <stdio.h>
-        int mytest()
-        {
-            char buf[20];
-            return snprintf(buf, sizeof(buf), "%s", "foo");
-        }
-        int main()
-        {
-            return (mytest());
-        }
+            #include <stdio.h>
+            int mytest()
+            {
+                char buf[20];
+                return snprintf(buf, sizeof(buf), "%s", "foo");
+            }
+            int main()
+            {
+                return (mytest());
+            }
         """, 
         '.c')
         context.Result(result)
@@ -471,16 +421,16 @@ def ConfigureEnv(env):
     def CheckSprintfReturn(context):
         context.Message(p.ConfigString("Checking for return value of sprintf()... ") )
         result = context.TryCompile("""
-        #include <stdio.h>
-        int mytest()
-        {
-            char buf[20];
-            return sprintf(buf, "%s", "foo");
-        }
-        int main()
-        {
-            return (mytest());
-        }
+            #include <stdio.h>
+            int mytest()
+            {
+                char buf[20];
+                return sprintf(buf, "%s", "foo");
+            }
+            int main()
+            {
+                return (mytest());
+            }
         """, 
         '.c')
         context.Result(result)
@@ -494,12 +444,12 @@ def ConfigureEnv(env):
     def CheckHidden(context):
         context.Message(p.ConfigString("Checking for attribute(visibility) support... ") )
         result = context.TryCompile("""
-        #define ZLIB_INTERNAL __attribute__((visibility ("hidden")))
-        int ZLIB_INTERNAL foo;
-        int main()
-        {
-            return 0;
-        }
+            #define ZLIB_INTERNAL __attribute__((visibility ("hidden")))
+            int ZLIB_INTERNAL foo;
+            int main()
+            {
+                return 0;
+            }
         """, 
         '.c')
         context.Result(result)
@@ -510,9 +460,9 @@ def ConfigureEnv(env):
     if not env.GetOption('clean'):
     
         if(GetOption('option_reconfigure')):
-            os.remove('build.conf')
+            os.remove(env.build_dir + "/" + 'build.conf')
 
-        vars = Variables('build.conf')
+        vars = Variables(env.build_dir + "/" + 'build.conf')
         
         vars.Add('ZPREFIX', '' )
         vars.Add('SOLO', '')
@@ -520,26 +470,27 @@ def ConfigureEnv(env):
         vars.Update(env)
 
         if('--zprefix' in sys.argv): env['ZPREFIX'] = GetOption('option_zprefix')
-        if('--solo' in sys.argv):    env['SOLO'] = GetOption('option_solo')
-        if('--cover' in sys.argv):   env['COVER'] = GetOption('option_cover')
+        if('--solo' in sys.argv):    env['SOLO']    = GetOption('option_solo')
+        if('--cover' in sys.argv):   env['COVER']   = GetOption('option_cover')
 
-        vars.Save('build.conf', env)
+        if not os.path.exists(env.project_dir + "/" + env.build_dir):
+            os.makedirs(env.project_dir + "/" + env.build_dir)
+
+        vars.Save(env.build_dir + "/" + 'build.conf', env)
 
         configureString = ""
         if env['ZPREFIX']: configureString += "--zprefix "
         if env['SOLO']:    configureString += "--solo "
         if env['COVER']:   configureString += "--cover "
-        if configureString == "":
-            configureString = "Configuring... "
-        else:
-            configureString = "Configuring with "
 
+        if configureString == "": configureString = "Configuring... "
+        else:                     configureString = "Configuring with "
 
-        ColorPrinter().InfoPrint(configureString)
+        p.InfoPrint(configureString)
 
         SCons.Script.Main.progress_display.set_mode(1)
 
-        conf = Configure(env,
+        conf = Configure(env, conf_dir = env.build_dir + "/conf_tests", log_file = env.build_dir + "/conf.log", 
             custom_tests = {
                 'CheckLargeFile64'     : CheckLargeFile64, 
                 'CheckFseeko'          : CheckFseeko,
@@ -582,7 +533,6 @@ def ConfigureEnv(env):
         if conf.env['COVER']:   conf.AddCover()
 
         with open('zconf.h', 'w') as content_file:
-            #print("Writing zconf.h...")
             content_file.write(conf.env["ZCONFH"])
 
         if conf.CheckVsnprintf():
@@ -702,8 +652,8 @@ def ConfigPlatformIDE(env, sourceFiles, headerFiles, resources, program):
         for file in headerFiles:
                 variantHeaderFiles.append(re.sub("^Source", "../Source", file))
         buildSettings = {
-            'LocalDebuggerCommand':os.path.abspath(env.baseProjectDir).replace('\\', '/') + "/build/MyLifeApp.exe",
-            'LocalDebuggerWorkingDirectory':os.path.abspath(env.baseProjectDir).replace('\\', '/') + "/build/",
+            'LocalDebuggerCommand':os.path.abspath(env.project_dir).replace('\\', '/') + "/build/MyLifeApp.exe",
+            'LocalDebuggerWorkingDirectory':os.path.abspath(env.project_dir).replace('\\', '/') + "/build/",
             
         }
         buildVariant = 'Release|x64'
@@ -738,45 +688,46 @@ def get_cpu_nums():
         return ncpus
     return 1 # Default
 
-def SetupBuild(env, type, progName, sourceFiles, resetCallback = None, previousBuild = None):
+def SetupBuild(env, prog_type, prog_name, source_files, reset_callback = None, previous_build = None):
 
-    buildEnv = env.Clone()
+    build_env = env.Clone()
 
-    windowsRedirect = ""
-    linuxRedirect = "2>&1"
+    win_redirect = ""
+    linux_redirect = "2>&1"
     if("Windows" in platform.system()):
-        windowsRedirect = "2>&1"
-        linuxRedirect = ""
+        win_redirect = "2>&1"
+        linux_redirect = ""
 
-    soureFileObjs = []
-    for file in sourceFiles:
-        if(type == "shared"):
-            buildObj = buildEnv.SharedObject(file, 
-                                CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + buildEnv.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
-                                CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + buildEnv.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
-            soureFileObjs.append(buildObj)
-        elif(type == "static" or type == 'exec'):
-            buildObj = buildEnv.Object(file, 
-                                CCCOM=env['CCCOM'] + " " + windowsRedirect + " > \"" + buildEnv.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect,
-                                CXXCOM=env['CXXCOM'] + " " + windowsRedirect + " > \"" + buildEnv.baseProjectDir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linuxRedirect)
-            soureFileObjs.append(buildObj)
+    source_objs = []
+    for file in source_files:
+
+        if(prog_type == 'shared'):    build_obj_command = build_env.SharedObject
+        elif(   prog_type == 'static' 
+             or prog_type == 'exec'): build_obj_command = build_env.Object
+        else:
+            ColorPrinter().ErrorPrint("Could not determine build type.")
+            raise
+
+        build_obj = build_obj_command(file, 
+            CCCOM= env['CCCOM']  + " " + win_redirect + " > \"" + build_env.project_dir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linux_redirect,
+            CXXCOM=env['CXXCOM'] + " " + win_redirect + " > \"" + build_env.project_dir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linux_redirect)
+        source_objs.append(build_obj)
+       
 
     if("Windows" in platform.system()):
-        env['LINKCOM'].list[0].cmd_list = env['LINKCOM'].list[0].cmd_list.replace('",'," 2>&1 > \\\"" + buildEnv.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\",") 
+        env['LINKCOM'].list[0].cmd_list = env['LINKCOM'].list[0].cmd_list.replace('",'," 2>&1 > \\\"" + build_env.project_dir + "/build/build_logs/" + prog_name + "_link.txt\\\"\",") 
     else:
-        env['LINKCOM'] = env['LINKCOM'].replace('",'," > \\\"" + buildEnv.baseProjectDir + "/build/build_logs/MyLifeApp_link.txt\\\"\" 2>&1 ,") 
+        env['LINKCOM'] = env['LINKCOM'].replace('",'," > \\\"" + build_env.project_dir + "/build/build_logs/" + prog_name + "_link.txt\\\"\" 2>&1 ,") 
    
-    if(type == "shared"):
-        prog = buildEnv.SharedLibrary(progName, soureFileObjs)
-    elif(type == "static"):
-        prog = buildEnv.StaticLibrary(progName, soureFileObjs)
-    elif(type == 'exec'):
-        prog = buildEnv.Program(progName, soureFileObjs)
+    if(prog_type == "shared"):
+        prog = build_env.SharedLibrary(env.build_dir + "/" + prog_name, source_objs)
+    elif(prog_type == "static"):
+        prog = build_env.StaticLibrary(env.build_dir + "/" + prog_name, source_objs)
+    elif(prog_type == 'exec'):
+        prog =       build_env.Program(env.build_dir + "/" + prog_name, source_objs)
 
-    ###################################################
-    # setup build output
-    if not os.path.exists(buildEnv.baseProjectDir + "/build/build_logs"):
-        os.makedirs(buildEnv.baseProjectDir + "/build/build_logs")
+    if not os.path.exists(build_env.project_dir + "/build/build_logs"):
+        os.makedirs(build_env.project_dir + "/build/build_logs")
 
     if ARGUMENTS.get('fail', 0):
         Command('target', 'source', ['/bin/false'])
@@ -784,31 +735,34 @@ def SetupBuild(env, type, progName, sourceFiles, resetCallback = None, previousB
     atexit.register(display_build_status)
 
     def print_cmd_line(s, targets, sources, env):
-        with open(buildEnv.baseProjectDir + "/build/build_logs/build_" + env['BUILD_LOG_TIME'] + ".log", "a") as f:
+        with open(build_env.project_dir + "/build/build_logs/build_" + env['BUILD_LOG_TIME'] + ".log", "a") as f:
             f.write(s + "\n")
 
     env['BUILD_LOG_TIME'] = datetime.datetime.fromtimestamp(time.time()).strftime('%Y_%m_%d__%H_%M_%S')
     if(not env['VERBOSE_COMPILE']):
         env['PRINT_CMD_LINE_FUNC'] = print_cmd_line
     
-    builtBins = []
+    built_bins = []
     if("Windows" in platform.system()):
-        builtBins.append("build/" + progName + ".exe")
+        built_bins.append(env.build_dir + "/" + prog_name + ".exe")
     else:
-        if(type == 'shared'):
-            builtBins.append('lib' + progName + ".so")
-        elif(type == 'static'):
-            builtBins.append('lib' + progName + ".a")
-        elif(type == 'exec'):
-            builtBins.append( progName )
+        if(prog_type == 'shared'):
+            built_bins.append(env.build_dir + "/" + env.subst('$SHLIBPREFIX') + prog_name + env.subst('$SHLIBSUFFIX'))
+        elif(prog_type == 'static'):
+            built_bins.append(env.build_dir + "/" + env.subst('$LIBPREFIX') + prog_name + env.subst('$LIBSUFFIX'))
+        elif(prog_type == 'exec'):
+            built_bins.append(env.build_dir + "/" + env.subst('$PROGPREFIX') + prog_name + env.subst('$PROGSUFFIX') )
 
-    if(not resetCallback == None and not previousBuild == None):
-        reset = buildEnv.Command( None, sourceFiles, resetCallback(sourceFiles, builtBins))
-        Depends(reset, previousBuild)
-        for node in soureFileObjs:
-            Depends(node, reset)
+    if(not reset_callback == None ):
+        if(previous_build == None):
+            AddPreAction(prog, reset_callback(source_files, built_bins))
+        else:
+            reset = build_env.Command( None, source_files, reset_callback(source_files, built_bins))
+            Depends(reset, previous_build)
+            for node in source_objs:
+                Depends(node, reset)
 
-    return [buildEnv, prog]
+    return [build_env, prog]
 
 def SetupInstalls(env):
 
@@ -900,8 +854,8 @@ def SetupOptions():
 
     if(not GetOption('option_verbose')):
         scons_ver = SCons.__version__
-        if int(scons_ver[0]) >= 3:
-            SetOption('silent', 1)
+        #if int(scons_ver[0]) >= 3:
+            #SetOption('silent', 1)
         SCons.Script.Main.progress_display.set_mode(0)
 
 class ProgressCounter(object):
@@ -1042,6 +996,9 @@ class ColorPrinter():
 
     def InfoPrint(self, message):
         print(self.HEADER + "[   INFO] " + self.ENDC + message)
+
+    def ErrorPrint(self, message):
+        print(self.FAIL + "[  ERROR] " + self.ENDC + message)
 
     def CompilePrint(self, percent, message):
         percent_string = "{0:.2f}".format(percent)
