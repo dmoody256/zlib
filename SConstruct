@@ -143,8 +143,10 @@ def CreateNewEnv():
     
 def ConfigureEnv(env):
 
+    p = ColorPrinter()
+
     def CheckLargeFile64(context):
-        context.Message('Checking for off64_t... ')
+        context.Message(p.ConfigString('Checking for off64_t... ') )
 
         prevDefines = ""
         if('CPPDEFINES' in context.env):
@@ -161,8 +163,8 @@ def ConfigureEnv(env):
         context.Result(result)
         return result
 
-    def CheckFseeko():
-        context.Message('Checking for fseeko... ')
+    def CheckFseeko(context):
+        context.Message(p.ConfigString('Checking for fseeko... ') )
         result = context.TryCompile("""
         #include <stdio.h>
         int main(void) {
@@ -177,7 +179,7 @@ def ConfigureEnv(env):
         return result
 
     def CheckSizeT(context):
-        context.Message('Checking for size_t... ')
+        context.Message(p.ConfigString('Checking for size_t... ') )
         result = context.TryCompile("""
         #include <stdio.h>
         #include <stdlib.h>
@@ -188,7 +190,7 @@ def ConfigureEnv(env):
         return result
     
     def CheckSizeTLongLong(context):
-        context.Message('Checking for long long... ')
+        context.Message(p.ConfigString('Checking for long long... ') )
         result = context.TryCompile("""
         long long dummy = 0;
         """, 
@@ -196,9 +198,9 @@ def ConfigureEnv(env):
         context.Result(result)
         return result
 
-    def CheckSizeTPointerSize(longlong_result):
+    def CheckSizeTPointerSize(context, longlong_result):
         result = []
-        context.Message('Checking for a pointer-size integer type... ')
+        context.Message(p.ConfigString('Checking for a pointer-size integer type... ') )
         if longlong_result:
             result = context.TryRun("""
             #include <stdio.h>
@@ -230,7 +232,7 @@ def ConfigureEnv(env):
             return True
 
     def CheckSharedLibrary(context):
-        context.Message('Checking for shared library support... ')
+        context.Message(p.ConfigString( 'Checking for shared library support... ') )
         result = context.TryBuild(context.env.SharedLibrary, """
         extern int getchar();
         int hello() {return getchar();}
@@ -241,7 +243,7 @@ def ConfigureEnv(env):
         return result
 
     def CheckUnistdH(context):
-        context.Message('Checking for unistd.h... ')
+        context.Message(p.ConfigString('Checking for unistd.h... ') )
         result = context.TryCompile("""
         #include <unistd.h>
         int main() { return 0; }
@@ -256,7 +258,7 @@ def ConfigureEnv(env):
    
 
     def CheckStrerror(context):
-        context.Message('Checking for strerror... ')
+        context.Message(p.ConfigString('Checking for strerror... ') )
         result = context.TryCompile("""
         #include <string.h>
         #include <errno.h>
@@ -269,7 +271,7 @@ def ConfigureEnv(env):
         return result
         
     def CheckStdargH(context):
-        context.Message('Checking for stdarg.h... ')
+        context.Message(p.ConfigString('Checking for stdarg.h... ') )
         result = context.TryCompile("""
         #include <stdarg.h>
         int main() { return 0; }
@@ -282,7 +284,7 @@ def ConfigureEnv(env):
         return result
 
     def AddZPrefix(context):
-        context.Message('Using z_ prefix on all symbols... ')
+        context.Message(p.ConfigString('Using z_ prefix on all symbols... ') )
         result = context.env['ZPREFIX'] 
         if result:
             context.env["ZCONFH"] = re.sub(
@@ -291,7 +293,7 @@ def ConfigureEnv(env):
         return result
 
     def AddSolo(context):
-        context.Message('Using Z_SOLO to build... ')
+        context.Message(p.ConfigString('Using Z_SOLO to build... ') )
         result = context.env['SOLO'] 
         if result:
             context.env["ZCONFH"] = re.sub(
@@ -300,7 +302,7 @@ def ConfigureEnv(env):
         return result
 
     def AddCover(context):
-        context.Message('Using code coverage flags... ')
+        context.Message(p.ConfigString('Using code coverage flags... ') )
         result = context.env['COVER'] 
         if result:
             context.env.Append(CCFLAGS=[
@@ -313,7 +315,7 @@ def ConfigureEnv(env):
         return result
     
     def CheckVsnprintf(context):
-        context.Message("Checking whether to use vs[n]printf() or s[n]printf()... ")
+        context.Message(p.ConfigString("Checking whether to use vs[n]printf() or s[n]printf()... ") )
         result = context.TryCompile("""
         #include <stdio.h>
         #include <stdarg.h>
@@ -334,7 +336,7 @@ def ConfigureEnv(env):
         return result
 
     def CheckVsnStdio(context):
-        context.Message("Checking for vsnprintf() in stdio.h... ")
+        context.Message(p.ConfigString("Checking for vsnprintf() in stdio.h... ") )
         result = context.TryCompile("""
         #include <stdio.h>
         #include <stdarg.h>
@@ -356,13 +358,13 @@ def ConfigureEnv(env):
         context.Result(result)
         if not result:
             context.env.Append(CPPDEFINES=["NO_vsnprintf"])
-            print("  WARNING: vsnprintf() not found, falling back to vsprintf(). zlib")
-            print("  can build but will be open to possible buffer-overflow security")
-            print("  vulnerabilities.")
+            print(p.ConfigString("  WARNING: vsnprintf() not found, falling back to vsprintf(). zlib") )
+            print(p.ConfigString("  can build but will be open to possible buffer-overflow security") )
+            print(p.ConfigString("  vulnerabilities.") )
         return result
 
     def CheckVsnprintfReturn(context):
-        context.Message("Checking for return value of vsnprintf()... ")
+        context.Message(p.ConfigString("Checking for return value of vsnprintf()... ") )
         result = context.TryCompile("""
         #include <stdio.h>
         #include <stdarg.h>
@@ -385,13 +387,13 @@ def ConfigureEnv(env):
         context.Result(result)
         if not result:
             context.env.Append(CPPDEFINES=["HAS_vsnprintf_void"])
-            print("  WARNING: apparently vsnprintf() does not return a value. zlib")
-            print("  can build but will be open to possible string-format security")
-            print("  vulnerabilities.")
+            print(p.ConfigString("  WARNING: apparently vsnprintf() does not return a value. zlib") )
+            print(p.ConfigString("  can build but will be open to possible string-format security") )
+            print(p.ConfigString("  vulnerabilities.") )
         return result
 
     def CheckVsprintfReturn(context):
-        context.Message("Checking for return value of vsnprintf()... ")
+        context.Message(p.ConfigString( "Checking for return value of vsnprintf()... ") )
         result = context.TryCompile("""
         #include <stdio.h>
         #include <stdarg.h>
@@ -414,13 +416,13 @@ def ConfigureEnv(env):
         context.Result(result)
         if not result:
             context.env.Append(CPPDEFINES=["HAS_vsprintf_void"])
-            print("  WARNING: apparently vsprintf() does not return a value. zlib")
-            print("  can build but will be open to possible string-format security")
-            print("  vulnerabilities.")
+            print(p.ConfigString("  WARNING: apparently vsprintf() does not return a value. zlib") )
+            print(p.ConfigString("  can build but will be open to possible string-format security") )
+            print(p.ConfigString("  vulnerabilities.") )
         return result
 
     def CheckSnStdio(context):
-        context.Message("Checking for snprintf() in stdio.h... ")
+        context.Message(p.ConfigString("Checking for snprintf() in stdio.h... ") )
         result = context.TryCompile("""
         #include <stdio.h>
         int mytest()
@@ -438,13 +440,13 @@ def ConfigureEnv(env):
         context.Result(result)
         if not result:
             context.env.Append(CPPDEFINES=["NO_snprintf"])
-            print("  WARNING: snprintf() not found, falling back to sprintf(). zlib")
-            print("  can build but will be open to possible buffer-overflow security")
-            print("  vulnerabilities.")
+            print(p.ConfigString("  WARNING: snprintf() not found, falling back to sprintf(). zlib") )
+            print(p.ConfigString("  can build but will be open to possible buffer-overflow security") )
+            print(p.ConfigString("  vulnerabilities.") )
         return result
 
     def CheckSnprintfReturn(context):
-        context.Message("Checking for return value of snprintf()... ")
+        context.Message(p.ConfigString("Checking for return value of snprintf()... ") )
         result = context.TryCompile("""
         #include <stdio.h>
         int mytest()
@@ -461,13 +463,13 @@ def ConfigureEnv(env):
         context.Result(result)
         if not result:
             context.env.Append(CPPDEFINES=["HAS_snprintf_void"])
-            print("  WARNING: apparently snprintf() does not return a value. zlib")
-            print("  can build but will be open to possible string-format security")
-            print("  vulnerabilities.")
+            print(p.ConfigString("  WARNING: apparently snprintf() does not return a value. zlib") )
+            print(p.ConfigString("  can build but will be open to possible string-format security") )
+            print(p.ConfigString("  vulnerabilities.") )
         return result
 
     def CheckSprintfReturn(context):
-        context.Message("Checking for return value of sprintf()... ")
+        context.Message(p.ConfigString("Checking for return value of sprintf()... ") )
         result = context.TryCompile("""
         #include <stdio.h>
         int mytest()
@@ -484,13 +486,13 @@ def ConfigureEnv(env):
         context.Result(result)
         if not result:
             context.env.Append(CPPDEFINES=["HAS_sprintf_void"])
-            print("  WARNING: apparently sprintf() does not return a value. zlib")
-            print("  can build but will be open to possible string-format security")
-            print("  vulnerabilities.")
+            print(p.ConfigString("  WARNING: apparently sprintf() does not return a value. zlib") )
+            print(p.ConfigString("  can build but will be open to possible string-format security") )
+            print(p.ConfigString("  vulnerabilities.") )
         return result
 
     def CheckHidden(context):
-        context.Message("Checking for attribute(visibility) support... ")
+        context.Message(p.ConfigString("Checking for attribute(visibility) support... ") )
         result = context.TryCompile("""
         #define ZLIB_INTERNAL __attribute__((visibility ("hidden")))
         int ZLIB_INTERNAL foo;
@@ -523,12 +525,19 @@ def ConfigureEnv(env):
 
         vars.Save('build.conf', env)
 
-        configureString = "Configuring with "
+        configureString = ""
         if env['ZPREFIX']: configureString += "--zprefix "
         if env['SOLO']:    configureString += "--solo "
         if env['COVER']:   configureString += "--cover "
+        if configureString == "":
+            configureString = "Configuring... "
+        else:
+            configureString = "Configuring with "
+
 
         ColorPrinter().InfoPrint(configureString)
+
+        SCons.Script.Main.progress_display.set_mode(1)
 
         conf = Configure(env,
             custom_tests = {
@@ -555,10 +564,8 @@ def ConfigureEnv(env):
                 })
 
         with open('zconf.h.in', 'r') as content_file:
-            #print("Reading zconf.h.in... ")
             conf.env["ZCONFH"] = str(content_file.read())  
 
-        conf.CheckCC()
         conf.CheckSharedLibrary()
         #conf.CheckExternalNames()
         if not conf.CheckSizeT():
@@ -590,6 +597,8 @@ def ConfigureEnv(env):
                 conf.CheckSprintfReturn()
 
         conf.CheckHidden()
+
+        SCons.Script.Main.progress_display.set_mode(0)
 
         env = conf.Finish()
     
@@ -626,7 +635,7 @@ def ConfigureEnv(env):
             #"GL",
         ])
 
-    elif platform == "darwin":
+    elif("darwin" in platform.system().lower()):
         print("XCode project not implemented yet")
     elif("win" in platform.system().lower() ):
 
@@ -683,7 +692,7 @@ def ConfigureEnv(env):
 def ConfigPlatformIDE(env, sourceFiles, headerFiles, resources, program):
     if platform == "linux" or platform == "linux2":
         print("Eclipse C++ project not implemented yet")
-    elif platform == "darwin":
+    elif("darwin" in platform.system().lower()):
         print("XCode project not implemented yet")
     elif("win" in platform.system().lower() ):
         variantSourceFiles = []
@@ -891,7 +900,7 @@ def SetupOptions():
 
     if(not GetOption('option_verbose')):
         scons_ver = SCons.__version__
-        if scons_ver[0] >= 3:
+        if int(scons_ver[0]) >= 3:
             SetOption('silent', 1)
         SCons.Script.Main.progress_display.set_mode(0)
 
@@ -1042,6 +1051,9 @@ class ColorPrinter():
 
     def LinkPrint(self, message):
         print(self.OKGREEN + "[   LINK] " + self.ENDC + message)
+
+    def ConfigString(self, message):
+        return self.OKBLUE + "[ CONFIG] " + self.ENDC + message
 
 
 CreateNewEnv()
