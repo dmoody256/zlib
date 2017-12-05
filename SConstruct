@@ -163,7 +163,7 @@ def ConfigureEnv(env):
         context.Result(result)
         return result
 
-    def CheckFseeko():
+    def CheckFseeko(context):
         context.Message(p.ConfigString('Checking for fseeko... ') )
         result = context.TryCompile("""
         #include <stdio.h>
@@ -198,7 +198,7 @@ def ConfigureEnv(env):
         context.Result(result)
         return result
 
-    def CheckSizeTPointerSize(longlong_result):
+    def CheckSizeTPointerSize(context, longlong_result):
         result = []
         context.Message(p.ConfigString('Checking for a pointer-size integer type... ') )
         if longlong_result:
@@ -635,7 +635,7 @@ def ConfigureEnv(env):
             #"GL",
         ])
 
-    elif platform == "darwin":
+    elif("darwin" in platform.system().lower()):
         print("XCode project not implemented yet")
     elif("win" in platform.system().lower() ):
 
@@ -692,7 +692,7 @@ def ConfigureEnv(env):
 def ConfigPlatformIDE(env, sourceFiles, headerFiles, resources, program):
     if platform == "linux" or platform == "linux2":
         print("Eclipse C++ project not implemented yet")
-    elif platform == "darwin":
+    elif("darwin" in platform.system().lower()):
         print("XCode project not implemented yet")
     elif("win" in platform.system().lower() ):
         variantSourceFiles = []
@@ -900,7 +900,7 @@ def SetupOptions():
 
     if(not GetOption('option_verbose')):
         scons_ver = SCons.__version__
-        if scons_ver[0] >= 3:
+        if int(scons_ver[0]) >= 3:
             SetOption('silent', 1)
         SCons.Script.Main.progress_display.set_mode(0)
 
