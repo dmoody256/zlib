@@ -70,18 +70,23 @@ def CreateNewEnv():
         
     shared_env, shared_lib   = zlib.SetupBuildEnv('shared', prog_name, base_source_files)
     static_env, static_lib   = zlib.SetupBuildEnv('static', prog_static_name, base_source_files, shared_lib)
-    example_env, example_bin = zlib.SetupBuildEnv('exec', 'example', ['build/test/example.c'], static_lib)
-    minizip_env, minizip_bin = zlib.SetupBuildEnv('exec', 'minigzip', ['build/test/minigzip.c'], example_bin)
-    
+
     if("Windows" in platform.system()):
         shared_env.Append(CPPDEFINES=['ZLIB_DLL'])
-        
-    example_env.Append(LIBPATH=['./build'])
-    example_env.Append(LIBS=['z'])
     
-    minizip_env.Append(LIBPATH=['./build'])
-    minizip_env.Append(LIBS=['z'])
 
+    if(not env['COVER']):
+        example_env, example_bin = zlib.SetupBuildEnv('exec', 'example', ['build/test/example.c'], static_lib)
+        minizip_env, minizip_bin = zlib.SetupBuildEnv('exec', 'minigzip', ['build/test/minigzip.c'], example_bin)
+
+        example_env.Append(LIBS=[File('./build/libz.a')])
+        minizip_env.Append(LIBS=[File('./build/libz.a')])
+
+    else:
+        infcover_env, infcover_bin = zlib.SetupBuildEnv('exec', 'infcover', ['build/test/infcover.c'], static_lib)
+        infcover_env.Append(LIBS=[File('./build/libz.a')])
+
+   
     #env = SetupInstalls(env)
     #env = ConfigPlatformIDE(env, source_files, headerFiles, resourceFiles, prog)
 
@@ -253,6 +258,13 @@ def ConfigureEnv(env):
             context.env.Append(CCFLAGS=[
                 '-fprofile-arcs', 
                 '-ftest-coverage',
+            ])
+            context.env.Append(LINKFLAGS=[
+                '-fprofile-arcs', 
+                '-ftest-coverage',
+            ])
+            context.env.Append(LIBS=[
+                'gcov', 
             ])
         if not context.env['GCC_CLASSIC'] == "":
             context.env.Replace(CC = context.env['GCC_CLASSIC'])
@@ -455,9 +467,9 @@ def ConfigureEnv(env):
     if not env.GetOption('clean'):
     
         if(GetOption('option_reconfigure')):
-            os.remove(env.build_dir + "/" + 'build.conf')
+            os.remove('build.conf')
 
-        vars = Variables(env.build_dir + "/" + 'build.conf')
+        vars = Variables('build.conf')
         
         vars.Add('ZPREFIX', '' )
         vars.Add('SOLO', '')
@@ -471,7 +483,7 @@ def ConfigureEnv(env):
         if not os.path.exists(env.project_dir + "/" + env.build_dir):
             os.makedirs(env.project_dir + "/" + env.build_dir)
 
-        vars.Save(env.build_dir + "/" + 'build.conf', env)
+        vars.Save('build.conf', env)
 
         configureString = ""
         if env['ZPREFIX']: configureString += "--zprefix "
@@ -479,7 +491,7 @@ def ConfigureEnv(env):
         if env['COVER']:   configureString += "--cover "
 
         if configureString == "": configureString = "Configuring... "
-        else:                     configureString = "Configuring with "
+        else:                     configureString = "Configuring with " + configureString
 
         p.InfoPrint(configureString)
 
