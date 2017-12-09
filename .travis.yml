@@ -35,7 +35,7 @@ before_script:
 script:
   - cd ${TRAVIS_BUILD_DIR}
   - scons --cover
-  - ./infcover
+  - ./build/infcover
 
 after_success:
 - cd ${TRAVIS_BUILD_DIR}
