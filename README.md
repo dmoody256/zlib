@@ -1,3 +1,5 @@
+
+[![Build Status](https://travis-ci.org/dmoody256/zlib.svg?branch=master)](https://travis-ci.org/dmoody256/zlib)[![Coverage Status](https://coveralls.io/repos/github/dmoody256/zlib/badge.svg?branch=master)](https://coveralls.io/github/dmoody256/zlib?branch=master)
 ZLIB DATA COMPRESSION LIBRARY
 
 zlib 1.2.11 is a general purpose data compression library.  All the code is
