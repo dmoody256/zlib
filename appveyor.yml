@@ -1,0 +1,6 @@
+install:
+  - pip install --egg SCons
+
+build: off
+build_script:
+  - cmd: scons
