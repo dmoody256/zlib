@@ -74,17 +74,18 @@ def CreateNewEnv():
     if("Windows" in platform.system()):
         shared_env.Append(CPPDEFINES=['ZLIB_DLL'])
     
+    zlib_static_lib = env.subst('$LIBPREFIX') + prog_static_name + env.subst('$LIBSUFFIX')
 
     if(not env['COVER']):
         example_env, example_bin = zlib.SetupBuildEnv('exec', 'example', ['build/test/example.c'], static_lib)
         minizip_env, minizip_bin = zlib.SetupBuildEnv('exec', 'minigzip', ['build/test/minigzip.c'], example_bin)
 
-        example_env.Append(LIBS=[File('./build/libz.a')])
-        minizip_env.Append(LIBS=[File('./build/libz.a')])
+        example_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
+        minizip_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
 
     else:
         infcover_env, infcover_bin = zlib.SetupBuildEnv('exec', 'infcover', ['build/test/infcover.c'], static_lib)
-        infcover_env.Append(LIBS=[File('./build/libz.a')])
+        infcover_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
 
    
     #env = SetupInstalls(env)
