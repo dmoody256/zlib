@@ -10,6 +10,9 @@ import platform
 import SCons.Action
 import SCons.Script.Main
 
+from BuildUtils.SconsUtils import SetBuildJobs, SetupBuildEnv, ProgressCounter
+from BuildUtils.ColorPrinter import ColorPrinter
+
 def CreateNewEnv():
 
     SetupOptions()
@@ -23,32 +26,25 @@ def CreateNewEnv():
         VERBOSE_COMPILE = GetOption('option_verbose'),
     )
 
-    env.project_dir = os.path.abspath(Dir('.').abspath).replace('\\', '/')
-    env.build_dir = 'build'
-
-    num_cpus = get_cpu_nums()
-    ColorPrinter().InfoPrint("Building with " + str(num_cpus) + " parallel jobs")
-    env.SetOption( "num_jobs", num_cpus )
-
-    env.VariantDir(env.build_dir,           Dir('.'), duplicate=0)
-    env.VariantDir(env.build_dir + '/test', Dir('./test'), duplicate=0)
+    env['PROJECT_DIR'] = os.path.abspath(Dir('.').abspath).replace('\\', '/')
+    SetBuildJobs(env)
 
     base_source_files = [
-        env.build_dir + '/adler32.c',
-        env.build_dir + '/compress.c',
-        env.build_dir + '/crc32.c',
-        env.build_dir + '/deflate.c',
-        env.build_dir + '/gzclose.c',
-        env.build_dir + '/gzlib.c',
-        env.build_dir + '/gzread.c',
-        env.build_dir + '/gzwrite.c',
-        env.build_dir + '/inflate.c',
-        env.build_dir + '/infback.c',
-        env.build_dir + '/inftrees.c',
-        env.build_dir + '/inffast.c',
-        env.build_dir + '/trees.c',
-        env.build_dir + '/uncompr.c',
-        env.build_dir + '/zutil.c',
+        'repo/adler32.c',
+        'repo/compress.c',
+        'repo/crc32.c',
+        'repo/deflate.c',
+        'repo/gzclose.c',
+        'repo/gzlib.c',
+        'repo/gzread.c',
+        'repo/gzwrite.c',
+        'repo/inflate.c',
+        'repo/infback.c',
+        'repo/inftrees.c',
+        'repo/inffast.c',
+        'repo/trees.c',
+        'repo/uncompr.c',
+        'repo/zutil.c',
     ]
 
     base_header_files = [
@@ -61,31 +57,35 @@ def CreateNewEnv():
 
     env = ConfigureEnv(env)
     env.Append(CPPPATH=['.'])
-    zlib = ZlibBuilder(env)
-    
     prog_name = 'z'
-    prog_static_name = 'z'
     if("Windows" in platform.system()):
-        prog_static_name += "_static"
-        
-    shared_env, shared_lib   = zlib.SetupBuildEnv('shared', prog_name, base_source_files)
-    static_env, static_lib   = zlib.SetupBuildEnv('static', prog_static_name, base_source_files, shared_lib)
+        prog_static_name = prog_name + "_static"
+
+    progress = ProgressCounter()
+
+    env, prog = SetupBuildEnv(env, progress, 'static', prog_static_name, base_source_files, 'build/build_static', 'deploy')
 
     if("Windows" in platform.system()):
-        shared_env.Append(CPPDEFINES=['ZLIB_DLL'])
+        env.Append(CPPDEFINES=['ZLIB_DLL'])
+
+    env, prog = SetupBuildEnv(env, progress, 'shared', prog_name, base_source_files, 'build/build_shared', 'deploy')
+
+    Progress(progress, interval=1)
+
     
-    zlib_static_lib = env.subst('$LIBPREFIX') + prog_static_name + env.subst('$LIBSUFFIX')
-
-    if(not env['COVER']):
-        example_env, example_bin = zlib.SetupBuildEnv('exec', 'example', ['build/test/example.c'], static_lib)
-        minizip_env, minizip_bin = zlib.SetupBuildEnv('exec', 'minigzip', ['build/test/minigzip.c'], example_bin)
-
-        example_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
-        minizip_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
-
-    else:
-        infcover_env, infcover_bin = zlib.SetupBuildEnv('exec', 'infcover', ['build/test/infcover.c'], static_lib)
-        infcover_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
+    
+    #zlib_static_lib = env.subst('$LIBPREFIX') + prog_static_name + env.subst('$LIBSUFFIX')
+#
+    #if(not env['COVER']):
+    #    example_env, example_bin = zlib.SetupBuildEnv('exec', 'example', ['build/test/example.c'], static_lib)
+    #    minizip_env, minizip_bin = zlib.SetupBuildEnv('exec', 'minigzip', ['build/test/minigzip.c'], example_bin)
+#
+    #    example_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
+    #    minizip_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
+#
+    #else:
+    #    infcover_env, infcover_bin = zlib.SetupBuildEnv('exec', 'infcover', ['build/test/infcover.c'], static_lib)
+    #    infcover_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
 
    
     #env = SetupInstalls(env)
@@ -481,9 +481,6 @@ def ConfigureEnv(env):
         if('--solo' in sys.argv):    env['SOLO']    = GetOption('option_solo')
         if('--cover' in sys.argv):   env['COVER']   = GetOption('option_cover')
 
-        if not os.path.exists(env.project_dir + "/" + env.build_dir):
-            os.makedirs(env.project_dir + "/" + env.build_dir)
-
         vars.Save('build.conf', env)
 
         configureString = ""
@@ -498,7 +495,7 @@ def ConfigureEnv(env):
 
         SCons.Script.Main.progress_display.set_mode(1)
 
-        conf = Configure(env, conf_dir = env.build_dir + "/conf_tests", log_file = env.build_dir + "/conf.log", 
+        conf = Configure(env, conf_dir = "build/conf_tests", log_file = "conf.log", 
             custom_tests = {
                 'CheckLargeFile64'     : CheckLargeFile64, 
                 'CheckFseeko'          : CheckFseeko,
@@ -522,7 +519,7 @@ def ConfigureEnv(env):
                 'AddCover'             : AddCover,
                 })
 
-        with open('zconf.h.in', 'r') as content_file:
+        with open('repo/zconf.h.in', 'r') as content_file:
             conf.env["ZCONFH"] = str(content_file.read())  
 
         conf.CheckSharedLibrary()
@@ -540,7 +537,7 @@ def ConfigureEnv(env):
         if conf.env['SOLO']:    conf.AddSolo()
         if conf.env['COVER']:   conf.AddCover()
 
-        with open('zconf.h', 'w') as content_file:
+        with open('repo/zconf.h', 'w') as content_file:
             content_file.write(conf.env["ZCONFH"])
 
         if conf.CheckVsnprintf():
@@ -624,8 +621,8 @@ def ConfigPlatformIDE(env, sourceFiles, headerFiles, resources, program):
         for file in headerFiles:
                 variantHeaderFiles.append(re.sub("^Source", "../Source", file))
         buildSettings = {
-            'LocalDebuggerCommand':os.path.abspath(env.project_dir).replace('\\', '/') + "/build/MyLifeApp.exe",
-            'LocalDebuggerWorkingDirectory':os.path.abspath(env.project_dir).replace('\\', '/') + "/build/",
+            'LocalDebuggerCommand':os.path.abspath(env['PROJECT_DIR']).replace('\\', '/') + "/build/MyLifeApp.exe",
+            'LocalDebuggerWorkingDirectory':os.path.abspath(env['PROJECT_DIR']).replace('\\', '/') + "/build/",
             
         }
         buildVariant = 'Release|x64'
@@ -642,123 +639,6 @@ def ConfigPlatformIDE(env, sourceFiles, headerFiles, resources, program):
                     variant = buildVariant,
                     cmdargs = cmdargs)
     return env
-
-def get_cpu_nums():
-    # Linux, Unix and MacOS:
-    if hasattr( os, "sysconf" ):
-        if "SC_NPROCESSORS_ONLN" in os.sysconf_names:
-            # Linux & Unix:
-            ncpus = os.sysconf( "SC_NPROCESSORS_ONLN" )
-        if isinstance(ncpus, int) and ncpus > 0:
-            return ncpus
-        else: # OSX:
-            return int( os.popen2( "sysctl -n hw.ncpu")[1].read() )
-    # Windows:
-    if "NUMBER_OF_PROCESSORS" in os.environ:
-        ncpus = int( os.environ[ "NUMBER_OF_PROCESSORS" ] );
-    if ncpus > 0:
-        return ncpus
-    return 1 # Default
-
-class ZlibBuilder():
-
-    def __init__(self, env):
-        self.build_num = 0
-        self.reset_callback = None
-        self.env = env
-        self.prog_counter = ProgressCounter()
-        self.reset_callback = SCons.Action.ActionFactory( self.prog_counter.ResetProgress,
-            lambda source_files, target_bins: 'Reseting Progress Counter for ' + str(target_bins))
-        
-        Progress(self.prog_counter, interval=1)
-
-    def SetupBuildEnv(self, prog_type, prog_name, source_files, previous_build = None):
-
-        self.build_num+=1
-        build_env = self.env.Clone()
-        variant_dir_str = build_env.build_dir + "/" + prog_name + "_objs_" + str(self.build_num)
-        build_env.VariantDir ( variant_dir_str, '.', duplicate=0 )
-        
-        variant_source_files = []
-        for file in source_files:
-            variant_source_files.append(file.replace(build_env.build_dir, variant_dir_str))
-        
-        win_redirect = ""
-        linux_redirect = "2>&1"
-        if("Windows" in platform.system()):
-            win_redirect = "2>&1"
-            linux_redirect = ""
-
-        source_objs = []
-        for file in variant_source_files:
-
-            if(prog_type == 'shared'):    build_obj_command = build_env.SharedObject
-            elif(   prog_type == 'static' 
-                 or prog_type == 'exec'): build_obj_command = build_env.Object
-            else:
-                ColorPrinter().ErrorPrint("Could not determine build type.")
-                raise
-
-            build_obj = build_obj_command(file, 
-                CCCOM= self.env['CCCOM']  + " " + win_redirect + " > \"" + build_env.project_dir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linux_redirect,
-                CXXCOM=self.env['CXXCOM'] + " " + win_redirect + " > \"" + build_env.project_dir + "/build/build_logs/" + os.path.splitext(os.path.basename(file))[0] + "_compile.txt\" " + linux_redirect)
-            source_objs.append(build_obj)
-           
-
-        if("Windows" in platform.system()):
-            build_env['LINKCOM'].list[0].cmd_list = self.env['LINKCOM'].list[0].cmd_list.replace('",'," 2>&1 > \\\"" + build_env.project_dir + "/build/build_logs/" + prog_name + "_link.txt\\\"\",") 
-        else:
-            build_env['LINKCOM'] = self.env['LINKCOM'].replace('",'," > \\\"" + build_env.project_dir + "/build/build_logs/" + prog_name + "_link.txt\\\"\" 2>&1 ,") 
-       
-        if(prog_type == "shared"):
-            prog = build_env.SharedLibrary(build_env.build_dir + "/" + prog_name, source_objs)
-        elif(prog_type == "static"):
-            prog = build_env.StaticLibrary(build_env.build_dir + "/" + prog_name, source_objs)
-        elif(prog_type == 'exec'):
-            prog =       build_env.Program(build_env.build_dir + "/" + prog_name, source_objs)
-
-        if not os.path.exists(build_env.project_dir + "/build/build_logs"):
-            os.makedirs(build_env.project_dir + "/build/build_logs")
-
-        if ARGUMENTS.get('fail', 0):
-            Command('target', 'source', ['/bin/false'])
-
-        atexit.register(display_build_status)
-
-        def print_cmd_line(s, targets, sources, env):
-            with open(build_env.project_dir + "/build/build_logs/build_" + env['BUILD_LOG_TIME'] + ".log", "a") as f:
-                f.write(s + "\n")
-
-        build_env['BUILD_LOG_TIME'] = datetime.datetime.fromtimestamp(time.time()).strftime('%Y_%m_%d__%H_%M_%S')
-        if(not build_env['VERBOSE_COMPILE']):
-            build_env['PRINT_CMD_LINE_FUNC'] = print_cmd_line
-        
-        built_bins = []
-        if("Windows" in platform.system()):
-            if(prog_type == 'shared'):
-                built_bins.append(build_env.build_dir + "/" + build_env.subst('$SHLIBPREFIX') + prog_name + build_env.subst('$SHLIBSUFFIX'))
-            elif(prog_type == 'static'):
-                built_bins.append(build_env.build_dir + "/" + build_env.subst('$LIBPREFIX') + prog_name + build_env.subst('$LIBSUFFIX'))
-            elif(prog_type == 'exec'):
-                built_bins.append(build_env.build_dir + "/" + build_env.subst('$PROGPREFIX') + prog_name + build_env.subst('$PROGSUFFIX') )
-        else:
-            if(prog_type == 'shared'):
-                built_bins.append(build_env.build_dir + "/" + build_env.subst('$SHLIBPREFIX') + prog_name + build_env.subst('$SHLIBSUFFIX'))
-            elif(prog_type == 'static'):
-                built_bins.append(build_env.build_dir + "/" + build_env.subst('$LIBPREFIX') + prog_name + build_env.subst('$LIBSUFFIX'))
-            elif(prog_type == 'exec'):
-                built_bins.append(build_env.build_dir + "/" + build_env.subst('$PROGPREFIX') + prog_name + build_env.subst('$PROGSUFFIX') )
-
-        if(not self.reset_callback == None ):
-            if(previous_build == None):
-                self.prog_counter.ResetProgress(variant_source_files, built_bins)
-            else:
-                reset = build_env.Command( None, variant_source_files, self.reset_callback(variant_source_files, built_bins))
-                Depends(reset, previous_build)
-                for node in source_objs:
-                    Depends(node, reset)
-
-        return [build_env, prog]
 
 def SetupInstalls(env):
 
@@ -853,177 +733,6 @@ def SetupOptions():
         if int(scons_ver[0]) >= 3:
             SetOption('silent', 1)
         SCons.Script.Main.progress_display.set_mode(0)
-
-class ProgressCounter(object):
-
-    def __init__(self):
-        self.count = 0.0
-        self.printer = ColorPrinter()
-        self.max_count = 1.0
-        self.progress_sources = []
-        self.target_binaries = []
-
-    def __call__(self, node, *args, **kw):
-        #print(str(node))
-
-        slashed_node = str(node).replace("\\", "/")
-        if(slashed_node in self.target_binaries):
-            filename = os.path.basename(slashed_node)
-            if(node.get_state() == 2): self.printer.LinkPrint("Linking " + filename)
-            else:                      self.printer.LinkPrint("Skipping, already built " + filename)
-
-        # TODO: make hanlding this file extensions better
-        if(   slashed_node.endswith(".obj") 
-           or slashed_node.endswith(".o"  ) 
-           or slashed_node.endswith(".os" ) ):
-
-            slashed_node_file = os.path.splitext(slashed_node)[0] + ".c"
-            #print (str(self.progress_sources) )
-            if(slashed_node_file in self.progress_sources ):
-
-                if(self.count == 0):
-                    start_build_string = "Building "
-                    for bin in self.target_binaries:
-                        start_build_string += bin + ", "
-                    start_build_string = start_build_string[:-2]
-                    self.printer.InfoPrint(start_build_string)
-
-                self.count += 1
-                percent = self.count / self.max_count * 100.00
-                filename = os.path.basename(slashed_node)
-                
-                if(node.get_state() == 2): 
-                    self.printer.CompilePrint( percent, "Compiling " + filename )
-                else:                      
-                    self.printer.CompilePrint( percent, "Skipping, already built " + filename )
-
-    def ResetProgress(self, source_files, target_binaries):
-        self.count = 0.0
-        self.max_count = float(len(source_files))
-        #print("reseting sources to " + str(source_files))
-        self.progress_sources = source_files
-        self.target_binaries = target_binaries
-
-def bf_to_str(bf):
-    """Convert an element of GetBuildFailures() to a string
-    in a useful way."""
-    import SCons.Errors
-    if bf is None: # unknown targets product None in list
-        return '(unknown tgt)'
-    elif isinstance(bf, SCons.Errors.StopError):
-        return str(bf)
-    elif bf.node:
-        return str(bf.node) + ': ' + bf.errstr
-    elif bf.filename:
-        return bf.filename + ': ' + bf.errstr
-    return 'unknown failure: ' + bf.errstr
-
-
-def build_status():
-    """Convert the build status to a 2-tuple, (status, msg)."""
-    from SCons.Script import GetBuildFailures
-    bf = GetBuildFailures()
-    if bf:
-        # bf is normally a list of build failures; if an element is None,
-        # it's because of a target that scons doesn't know anything about.
-        status = 'failed'
-        failures_message = "\n".join(["%s" % bf_to_str(x)
-                           for x in bf if x is not None])
-    else:
-        # if bf is None, the build completed successfully.
-        status = 'ok'
-        failures_message = ''
-    return (status, failures_message)
-
-def highlight_word(line, word, color):
-    ENDC = '\033[0m'
-    return line.replace(word, color + word + ENDC )
-    
-    
-def display_build_status():
-    """Display the build status.  Called by atexit.
-    Here you could do all kinds of complicated things."""
-    status, failures_message = build_status()
-    
-    if("Windows" in platform.system()):
-        HEADER = ''
-        OKBLUE = ''
-        OKGREEN = ''
-        WARNING = ''
-        FAIL = ''
-        ENDC = ''
-    else:
-        HEADER = '\033[95m'
-        OKBLUE = '\033[94m'
-        OKGREEN = '\033[92m'
-        WARNING = '\033[93m'
-        FAIL = '\033[91m'
-        ENDC = '\033[0m'
-    
-    if status == 'failed':
-        compileOutput = []
-        for filename in glob.glob('build/build_logs/*_compile.txt'):
-            f = open(filename, "r")
-            tempList = f.read().splitlines()
-            if(len(tempList) > 0):
-                compileOutput += [OKBLUE + os.path.basename(filename).replace("_compile.txt", "") + ":" + ENDC]
-                compileOutput += tempList
-        for line in compileOutput:
-            line = highlight_word(line, "error", FAIL)
-            line = highlight_word(line, "warning", WARNING)
-            print(line)
-        linkOutput = []
-        buildLink = ""
-        for filename in glob.glob('build/build_logs/*_link.txt'):
-            f = open(filename, "r")
-            tempList = f.read().splitlines()
-            if(len(tempList) > 0):
-                buildLink = os.path.basename(filename).replace("_link.txt", "")
-                linkOutput += [OKBLUE + buildLink + ":" + ENDC]
-                linkOutput += tempList
-        for line in linkOutput:
-            line = highlight_word(line, "error", FAIL)
-            line = highlight_word(line, "warning", WARNING)
-            print(line)
-            print(FAIL + "Build of " + buildLink + " failed." + ENDC)
-    
-
-class ColorPrinter():
-
-    def __init__(self):
-    
-        if("Windows" in platform.system()):
-            self.HEADER = ''
-            self.OKBLUE = ''
-            self.OKGREEN = ''
-            self.WARNING = ''
-            self.FAIL = ''
-            self.ENDC = ''
-        else:
-            self.HEADER = '\033[95m'
-            self.OKBLUE = '\033[94m'
-            self.OKGREEN = '\033[92m'
-            self.WARNING = '\033[93m'
-            self.FAIL = '\033[91m'
-            self.ENDC = '\033[0m'
-
-    def InfoPrint(self, message):
-        print(self.HEADER + "[   INFO] " + self.ENDC + message)
-
-    def ErrorPrint(self, message):
-        print(self.FAIL + "[  ERROR] " + self.ENDC + message)
-
-    def CompilePrint(self, percent, message):
-        percent_string = "{0:.2f}".format(percent)
-        if(percent < 100): percent_string = " " + percent_string
-        if(percent < 10):  percent_string = " " + percent_string
-        print(self.OKGREEN + "[" + percent_string + "%] " + self.ENDC + message )
-
-    def LinkPrint(self, message):
-        print(self.OKGREEN + "[   LINK] " + self.ENDC + message)
-
-    def ConfigString(self, message):
-        return self.OKBLUE + "[ CONFIG] " + self.ENDC + message
 
 
 CreateNewEnv()
