@@ -1,6 +1,6 @@
 install:
   - python -m pip install -U --progress-bar off pip setuptools wheel
-  - python -m pip install -U --progress-bar off scons pypiwin32
+  - python -m pip install -U --progress-bar off scons pypiwin32 colorama
   - git submodule update --init --recursive
 
 build: off
