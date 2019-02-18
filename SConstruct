@@ -73,20 +73,18 @@ def CreateNewEnv():
 
     Progress(progress, interval=1)
 
-    
-    
-    #zlib_static_lib = env.subst('$LIBPREFIX') + prog_static_name + env.subst('$LIBSUFFIX')
-#
-    #if(not env['COVER']):
-    #    example_env, example_bin = zlib.SetupBuildEnv('exec', 'example', ['build/test/example.c'], static_lib)
-    #    minizip_env, minizip_bin = zlib.SetupBuildEnv('exec', 'minigzip', ['build/test/minigzip.c'], example_bin)
-#
-    #    example_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
-    #    minizip_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
-#
-    #else:
-    #    infcover_env, infcover_bin = zlib.SetupBuildEnv('exec', 'infcover', ['build/test/infcover.c'], static_lib)
-    #    infcover_env.Append(LIBS=[File('./build/' + zlib_static_lib)])
+    zlib_static_lib = env.subst('$LIBPREFIX') + prog_static_name + env.subst('$LIBSUFFIX')
+
+    if(not env['COVER']):
+        example_env, example_bin = SetupBuildEnv(env, progress, 'exec', 'example', ['build/repo/test/example.c'], 'build/build_static', 'build')
+        minizip_env, minizip_bin = SetupBuildEnv(env, progress, 'exec', 'minigzip', ['build/repo/test/minigzip.c'], 'build/build_static', 'build')
+
+        example_env.Append(LIBS=[File('./build/build_static/' + zlib_static_lib)])
+        minizip_env.Append(LIBS=[File('./build/build_static/' + zlib_static_lib)])
+
+    else:
+        infcover_env, infcover_env = SetupBuildEnv(env, progress, 'exec', 'infcover', ['build/repo/test/infcover.c'], 'build/build_static', 'build')
+        infcover_env.Append(LIBS=[File('./build/build_static/' + zlib_static_lib)])
 
    
     #env = SetupInstalls(env)
