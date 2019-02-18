@@ -1,5 +1,6 @@
 install:
-  - pip install --egg SCons
+  - python -m pip install -U --progress-bar off pip setuptools wheel
+  - python -m pip install -U --progress-bar off scons
 
 build: off
 build_script:
