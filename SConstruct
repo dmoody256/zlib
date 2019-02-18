@@ -64,27 +64,26 @@ def CreateNewEnv():
 
     progress = ProgressCounter()
 
-    env, prog = SetupBuildEnv(env, progress, 'static', prog_static_name, base_source_files, 'build/build_static', 'deploy')
+    static_env, z_static = SetupBuildEnv(env, progress, 'static', prog_static_name, base_source_files, 'build/build_static', 'deploy')
+    shared_env, z_shared = SetupBuildEnv(env, progress, 'shared', prog_name, base_source_files, 'build/build_shared', 'deploy')
 
     if("Windows" in platform.system()):
-        env.Append(CPPDEFINES=['ZLIB_DLL'])
-
-    env, prog = SetupBuildEnv(env, progress, 'shared', prog_name, base_source_files, 'build/build_shared', 'deploy')
+        shared_env.Append(CPPDEFINES=['ZLIB_DLL'])
 
     Progress(progress, interval=1)
 
     zlib_static_lib = env.subst('$LIBPREFIX') + prog_static_name + env.subst('$LIBSUFFIX')
 
     if(not env['COVER']):
-        example_env, example_bin = SetupBuildEnv(env, progress, 'exec', 'example', ['build/repo/test/example.c'], 'build/build_static', 'build')
-        minizip_env, minizip_bin = SetupBuildEnv(env, progress, 'exec', 'minigzip', ['build/repo/test/minigzip.c'], 'build/build_static', 'build')
+        example_env, example_bin = SetupBuildEnv(env, progress, 'exec', 'example', ['repo/test/example.c'], 'build/build_static', 'build')
+        minizip_env, minizip_bin = SetupBuildEnv(env, progress, 'exec', 'minigzip', ['repo/test/minigzip.c'], 'build/build_static', 'build')
 
-        example_env.Append(LIBS=[File('./build/build_static/' + zlib_static_lib)])
-        minizip_env.Append(LIBS=[File('./build/build_static/' + zlib_static_lib)])
+        example_env.Append(CPPPATH=[Dir('repo').abspath], LIBS=[File('./deploy/' + zlib_static_lib)])
+        minizip_env.Append(CPPPATH=[Dir('repo').abspath], LIBS=[File('./deploy/' + zlib_static_lib)])
 
     else:
-        infcover_env, infcover_env = SetupBuildEnv(env, progress, 'exec', 'infcover', ['build/repo/test/infcover.c'], 'build/build_static', 'build')
-        infcover_env.Append(LIBS=[File('./build/build_static/' + zlib_static_lib)])
+        infcover_env, infcover_env = SetupBuildEnv(env, progress, 'exec', 'infcover', ['repo/test/infcover.c'], 'build/build_static', 'build')
+        infcover_env.Append(CPPPATH=[Dir('repo').abspath], LIBS=[File('./deploy/' + zlib_static_lib)])
 
    
     #env = SetupInstalls(env)
@@ -174,11 +173,11 @@ def ConfigureEnv(env):
             '.c')
         
         if result[1] == "":
-            context.Result("Failed.");
+            context.Result("Failed.")
             return False
         else:
-            context.env.Append(CPPDEFINES=['NO_SIZE_T='+size_t_type])
-            context.Result(size_t_type + ".")
+            context.env.Append(CPPDEFINES=['NO_SIZE_T='+result[1]])
+            context.Result(result[1] + ".")
             return True
 
     def CheckSharedLibrary(context):
