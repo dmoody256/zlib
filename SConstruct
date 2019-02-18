@@ -58,6 +58,7 @@ def CreateNewEnv():
     env = ConfigureEnv(env)
     env.Append(CPPPATH=['.'])
     prog_name = 'z'
+    prog_static_name = prog_name
     if("Windows" in platform.system()):
         prog_static_name = prog_name + "_static"
 
