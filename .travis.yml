@@ -22,7 +22,7 @@ install:
   # install lcov to coveralls conversion + upload tool
   - gem install coveralls-lcov
   - python -m pip install -U --progress-bar off pip setuptools wheel
-  - python -m pip install -U --progress-bar scons
+  - python -m pip install -U --progress-bar off scons
 
 before_script:
   - cd ${TRAVIS_BUILD_DIR}

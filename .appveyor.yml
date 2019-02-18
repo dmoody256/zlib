@@ -1,7 +1,9 @@
 install:
   - python -m pip install -U --progress-bar off pip setuptools wheel
   - python -m pip install -U --progress-bar off scons
+  - git submodule update --init --recursive
 
 build: off
 build_script:
+  - cmd: git 
   - cmd: scons
