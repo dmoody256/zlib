@@ -82,7 +82,7 @@ def CreateNewEnv():
         minizip_env.Append(CPPPATH=[Dir('repo').abspath], LIBS=[File('./deploy/' + zlib_static_lib)])
 
     else:
-        infcover_env, infcover_env = SetupBuildEnv(env, progress, 'exec', 'infcover', ['repo/test/infcover.c'], 'build/build_static', 'build')
+        infcover_env, infcover_bin = SetupBuildEnv(env, progress, 'exec', 'infcover', ['repo/test/infcover.c'], 'build/build_static', 'build')
         infcover_env.Append(CPPPATH=[Dir('repo').abspath], LIBS=[File('./deploy/' + zlib_static_lib)])
 
    
