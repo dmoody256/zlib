@@ -5,5 +5,4 @@ install:
 
 build: off
 build_script:
-  - cmd: git 
   - cmd: scons
