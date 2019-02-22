@@ -2,7 +2,11 @@ install:
   - python -m pip install -U --progress-bar off pip setuptools wheel
   - python -m pip install -U --progress-bar off scons pypiwin32 colorama
   - git submodule update --init --recursive
+  - git submodule foreach git pull origin master
 
 build: off
 build_script:
-  - cmd: scons
+  - scons
+  - scons -c
+  - git submodule foreach git pull origin master
+  - scons
