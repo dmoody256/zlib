@@ -35,7 +35,6 @@ script:
   - git submodule foreach git pull origin master
   - scons --cover
   - ./build/infcover
-  - 
 
 after_success:
 - cd ${TRAVIS_BUILD_DIR}
