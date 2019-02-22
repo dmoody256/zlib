@@ -30,8 +30,12 @@ before_script:
 
 script:
   - cd ${TRAVIS_BUILD_DIR}
+  - scons 
+  - scons -c
+  - git submodule foreach git pull origin master
   - scons --cover
   - ./build/infcover
+  - 
 
 after_success:
 - cd ${TRAVIS_BUILD_DIR}
