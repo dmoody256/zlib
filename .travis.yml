@@ -2,7 +2,7 @@ matrix:
   include:
     - os: linux
       dist: trusty
-      python: '3.5'
+      python: '3.6'
       env: 
         - PYTHONCOM=python
         - PYTHON_VERSION=3.5
