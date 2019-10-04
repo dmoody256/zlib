@@ -1,18 +1,15 @@
+os: linux
+language: python
+
 matrix:
   include:
-    - os: linux
-      dist: trusty
+    - dist: trusty
       python: '3.6'
-      env: 
-        - PYTHONCOM=python
-        - PYTHON_VERSION=3.5
-    - os: linux
-      dist: trusty
-      python: '2.7'
-      env: 
-        - PYTHONCOM=python
-        - PYTHON_VERSION=2.7
-      
+    - dist: xenial
+      python: '3.7'
+    - dist: bionic
+      python: '3.7'
+   
 install:
   - cd ${TRAVIS_BUILD_DIR}
   # install latest LCOV (1.9 was failing for me) [1]
@@ -21,8 +18,8 @@ install:
   - sudo make -C lcov-1.11/ install
   # install lcov to coveralls conversion + upload tool
   - gem install coveralls-lcov
-  - sudo -H python -m pip install -U pip setuptools wheel
-  - sudo -H python -m pip install -U scons
+  - pip install -U pip setuptools wheel
+  - pip install -U scons
 
 before_script:
   - cd ${TRAVIS_BUILD_DIR}
